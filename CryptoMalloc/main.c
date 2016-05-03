@@ -151,17 +151,27 @@ void *realloc(void *ptr, size_t size){
 	MemNode node;
 	void *new = NULL;
 	if (cor_map_get(&mem_map, ptr, &node)){
+		if (size == 0){
+			free(ptr);
+			return NULL;
+		}
 		new = malloc(size);
 		memcpy(new, ptr, node.alloc_size);
-	} else {
-		printf("LIBC REALLOC");
-		new = libc_realloc(ptr, size);
+		free(ptr);
+		return new;
 	}
-	return new;
+	printf("LIBC REALLOC");
+	return libc_realloc(ptr, size);
 }
 
 void *calloc(size_t count, size_t size){
-	return malloc(count * size);
+	void *result = malloc(count * size);
+	size_t *z;
+	count = (count + sizeof *z - 1)/sizeof *z;
+	for (size_t *z = result; count != 0 ; count--, z++){
+		if (*z) *z = 0;
+	}
+	return result;
 }
 
 /*
