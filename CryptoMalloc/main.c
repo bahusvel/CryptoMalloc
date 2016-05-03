@@ -117,7 +117,7 @@ void* malloc(size_t size){
     lseek(fnum, size - 1, SEEK_SET);
     write(fnum, &fend, 1);
     fsync(fnum);
-    void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fnum, 0);
+    void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fnum, 0);
     if (crypto_mem != MAP_FAILED) {
 		MemNode node = {fnum, __crypto_allocid - 1, size};
         cor_map_set(&mem_map, crypto_mem, &node);
@@ -160,7 +160,7 @@ void *realloc(void *ptr, size_t size){
 		free(ptr);
 		return new;
 	}
-	printf("LIBC REALLOC");
+	printf("LIBC REALLOC\n");
 	return libc_realloc(ptr, size);
 }
 
