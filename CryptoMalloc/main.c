@@ -13,6 +13,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <pthread.h>
+
+static pthread_mutex_t mymutex=PTHREAD_MUTEX_INITIALIZER;
 
 static void *(*libc_malloc)(size_t);
 static void *(*libc_realloc)(void *, size_t);
@@ -83,7 +86,6 @@ static void crypto_malloc_ctor(){
 		libc_calloc = dlsym(RTLD_NEXT, "realloc");
 		libc_realloc = dlsym(RTLD_NEXT, "calloc");
 		libc_free = dlsym(RTLD_NEXT, "free");
-		printf("It worked?");
 	}
 }
 
@@ -108,10 +110,10 @@ void* malloc(size_t size){
 		libc_realloc = dlsym(RTLD_NEXT, "calloc");
 		libc_free = dlsym(RTLD_NEXT, "free");
 	}
-							 
+	pthread_mutex_lock(&mymutex);
     char path[sizeof(CRYPTO_PATH) + 20];
     sprintf(path, "%s%016lx.mem", CRYPTO_PATH, __crypto_allocid++);
-    int fnum = open(path, O_RDWR | O_CREAT, S_IRWXU);
+	int fnum = open(path, O_RDWR | O_CREAT | O_SYNC | O_TRUNC, S_IRWXU); // O_DIRECT for linux?
     lseek(fnum, size - 1, SEEK_SET);
     write(fnum, &fend, 1);
     fsync(fnum);
@@ -119,15 +121,18 @@ void* malloc(size_t size){
     if (crypto_mem != MAP_FAILED) {
 		MemNode node = {fnum, __crypto_allocid - 1, size};
         cor_map_set(&mem_map, crypto_mem, &node);
+		pthread_mutex_unlock(&mymutex);
         return crypto_mem;
     } else {
         close(fnum);
+		pthread_mutex_unlock(&mymutex);
         return NULL;
     }
 }
 
 void free(void *ptr){
     //assert(mem_map != NULL);
+	pthread_mutex_lock(&mymutex);
     MemNode node;
 	if (cor_map_get(&mem_map, ptr, &node)){
 		munmap(ptr, node.alloc_size);
@@ -138,13 +143,23 @@ void free(void *ptr){
 	} else {
 		libc_free(ptr);
 	}
+	pthread_mutex_unlock(&mymutex);
 }
 
 // TODO: Use a more sophisticated realloc, for better performance
 void *realloc(void *ptr, size_t size){
-	free(ptr);
-	return malloc(size);
+	MemNode node;
+	void *new = NULL;
+	if (cor_map_get(&mem_map, ptr, &node)){
+		new = malloc(size);
+		memcpy(new, ptr, node.alloc_size);
+	} else {
+		printf("LIBC REALLOC");
+		new = libc_realloc(ptr, size);
+	}
+	return new;
 }
+
 void *calloc(size_t count, size_t size){
 	return malloc(count * size);
 }

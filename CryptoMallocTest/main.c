@@ -11,10 +11,19 @@
 #include <string.h>
 
 int main(int argc, const char * argv[]) {
-    // insert code here...
-    char *crypto_string = malloc(100);
-    strcpy(crypto_string, "ThisIsMyPassword");
-    printf("%s\n", crypto_string);
-    free(crypto_string);
-    return 0;
+	char *str;
+	
+	/* Initial memory allocation */
+	str = (char *) malloc(15);
+	strcpy(str, "tutorialspoint");
+	printf("String = %s,  Address = %u\n", str, str);
+	
+	/* Reallocating memory */
+	str = (char *) realloc(str, 25);
+	strcat(str, ".com");
+	printf("String = %s,  Address = %u\n", str, str);
+	
+	free(str);
+	
+	return(0);
 }
