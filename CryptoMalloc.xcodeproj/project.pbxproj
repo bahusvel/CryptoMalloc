@@ -7,20 +7,33 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A80B35E71CD8D0E100E5600F /* libCryptoMalloc.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
+		A80B35E91CD8D13500E5600F /* libCryptoMalloc.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 		A89C74531CD8561B0075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74521CD8561B0075007B /* main.c */; };
 		A89C745F1CD857050075007B /* libCryptoMalloc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 		A89C74621CD857320075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74421CD82FF50075007B /* main.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		A89C744E1CD8561B0075007B /* CopyFiles */ = {
+		A80B35E81CD8D12C00E5600F /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
+			buildActionMask = 8;
+			dstPath = /usr/share/man/man1;
 			dstSubfolderSpec = 0;
 			files = (
+				A80B35E91CD8D13500E5600F /* libCryptoMalloc.dylib in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 1;
+		};
+		A89C744E1CD8561B0075007B /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = /Users/denislavrov/Desktop;
+			dstSubfolderSpec = 0;
+			files = (
+				A80B35E71CD8D0E100E5600F /* libCryptoMalloc.dylib in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -104,6 +117,7 @@
 				A89C744C1CD8561B0075007B /* Sources */,
 				A89C744D1CD8561B0075007B /* Frameworks */,
 				A89C744E1CD8561B0075007B /* CopyFiles */,
+				A80B35E81CD8D12C00E5600F /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -318,6 +332,7 @@
 				A89C74551CD8561B0075007B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		A89C745C1CD856DA0075007B /* Build configuration list for PBXNativeTarget "CryptoMalloc" */ = {
 			isa = XCConfigurationList;
@@ -326,6 +341,7 @@
 				A89C745E1CD856DA0075007B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
