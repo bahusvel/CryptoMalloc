@@ -60,17 +60,14 @@ static cor_map_node *create_node(void *key, MemNode *node){
 }
 
 static void cor_map_set(cor_map* map, void *key, MemNode *node){
-    MemNode tnode;
-    if (cor_map_get(map, key, &tnode) == 0) {
-        if (map->first == NULL) {
-            map->first = create_node(key, node);
-            map->last = map->first;
-        } else {
-            cor_map_node *last_node = map->last;
-            last_node->next = create_node(key, node);
-            map->last = last_node->next;
-        }
-    }
+	if (map->first == NULL) {
+		map->first = create_node(key, node);
+		map->last = map->first;
+	} else {
+		cor_map_node *last_node = map->last;
+		last_node->next = create_node(key, node);
+		map->last = last_node->next;
+	}
 }
 
 
@@ -166,21 +163,6 @@ void *realloc(void *ptr, size_t size){
 
 void *calloc(size_t count, size_t size){
 	void *result = malloc(count * size);
-	size_t *z;
-	count = (count + sizeof *z - 1)/sizeof *z;
-	for (size_t *z = result; count != 0 ; count--, z++){
-		if (*z) *z = 0;
-	}
+	memset(result, 0, count * size);
 	return result;
 }
-
-/*
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    char *crypto_string = crypto_malloc(100);
-    strcpy(crypto_string, "ThisIsMyPassword");
-    printf("%s\n", crypto_string);
-    crypto_free(crypto_string);
-    return 0;
-}
-*/
