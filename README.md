@@ -19,7 +19,7 @@ It doesn't encrypt your processes virtual memory or its stack, only memory that 
 # How to use it?
 ```bash
 # Mac OS X
-DYLD_INSERT_LIBRARIES=libCryptoMalloc.dylib [application]
+DYLD_FORCE_FLAT_NAMESPACE=1 DYLD_INSERT_LIBRARIES=libCryptoMalloc.dylib [application]
 # Linux
 LD_PRELOAD=cryptomalloc.so [application]
 ```
