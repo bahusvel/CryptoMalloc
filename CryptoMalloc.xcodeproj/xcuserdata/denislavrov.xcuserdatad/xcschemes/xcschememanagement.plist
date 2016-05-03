@@ -9,10 +9,25 @@
 			<key>orderHint</key>
 			<integer>0</integer>
 		</dict>
+		<key>CryptoMallocTest.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
+		</dict>
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
 		<key>A89C743E1CD82FF50075007B</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>A89C744F1CD8561B0075007B</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>A89C745A1CD856DA0075007B</key>
 		<dict>
 			<key>primary</key>
 			<true/>

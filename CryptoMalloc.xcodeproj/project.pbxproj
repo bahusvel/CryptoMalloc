@@ -7,12 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A89C74431CD82FF50075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74421CD82FF50075007B /* main.c */; };
-		A89C744B1CD831D80075007B /* cor_map.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74491CD831D80075007B /* cor_map.c */; };
+		A89C74531CD8561B0075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74521CD8561B0075007B /* main.c */; };
+		A89C745F1CD857050075007B /* libCryptoMalloc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
+		A89C74621CD857320075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74421CD82FF50075007B /* main.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		A89C743D1CD82FF50075007B /* CopyFiles */ = {
+		A89C744E1CD8561B0075007B /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = /usr/share/man/man1/;
@@ -24,14 +25,22 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A89C743F1CD82FF50075007B /* CryptoMalloc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CryptoMalloc; sourceTree = BUILT_PRODUCTS_DIR; };
 		A89C74421CD82FF50075007B /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
-		A89C74491CD831D80075007B /* cor_map.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cor_map.c; sourceTree = "<group>"; };
-		A89C744A1CD831D80075007B /* cor_map.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cor_map.h; sourceTree = "<group>"; };
+		A89C74501CD8561B0075007B /* CryptoMallocTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CryptoMallocTest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A89C74521CD8561B0075007B /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libCryptoMalloc.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A89C743C1CD82FF50075007B /* Frameworks */ = {
+		A89C744D1CD8561B0075007B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A89C745F1CD857050075007B /* libCryptoMalloc.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A89C74581CD856DA0075007B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -45,6 +54,7 @@
 			isa = PBXGroup;
 			children = (
 				A89C74411CD82FF50075007B /* CryptoMalloc */,
+				A89C74511CD8561B0075007B /* CryptoMallocTest */,
 				A89C74401CD82FF50075007B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,7 +62,8 @@
 		A89C74401CD82FF50075007B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A89C743F1CD82FF50075007B /* CryptoMalloc */,
+				A89C74501CD8561B0075007B /* CryptoMallocTest */,
+				A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -60,23 +71,56 @@
 		A89C74411CD82FF50075007B /* CryptoMalloc */ = {
 			isa = PBXGroup;
 			children = (
-				A89C74491CD831D80075007B /* cor_map.c */,
-				A89C744A1CD831D80075007B /* cor_map.h */,
 				A89C74421CD82FF50075007B /* main.c */,
 			);
 			path = CryptoMalloc;
 			sourceTree = "<group>";
 		};
+		A89C74511CD8561B0075007B /* CryptoMallocTest */ = {
+			isa = PBXGroup;
+			children = (
+				A89C74521CD8561B0075007B /* main.c */,
+			);
+			path = CryptoMallocTest;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
+/* Begin PBXHeadersBuildPhase section */
+		A89C74591CD856DA0075007B /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
 /* Begin PBXNativeTarget section */
-		A89C743E1CD82FF50075007B /* CryptoMalloc */ = {
+		A89C744F1CD8561B0075007B /* CryptoMallocTest */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A89C74461CD82FF50075007B /* Build configuration list for PBXNativeTarget "CryptoMalloc" */;
+			buildConfigurationList = A89C74561CD8561B0075007B /* Build configuration list for PBXNativeTarget "CryptoMallocTest" */;
 			buildPhases = (
-				A89C743B1CD82FF50075007B /* Sources */,
-				A89C743C1CD82FF50075007B /* Frameworks */,
-				A89C743D1CD82FF50075007B /* CopyFiles */,
+				A89C744C1CD8561B0075007B /* Sources */,
+				A89C744D1CD8561B0075007B /* Frameworks */,
+				A89C744E1CD8561B0075007B /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CryptoMallocTest;
+			productName = CryptoMallocTest;
+			productReference = A89C74501CD8561B0075007B /* CryptoMallocTest */;
+			productType = "com.apple.product-type.tool";
+		};
+		A89C745A1CD856DA0075007B /* CryptoMalloc */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A89C745C1CD856DA0075007B /* Build configuration list for PBXNativeTarget "CryptoMalloc" */;
+			buildPhases = (
+				A89C74571CD856DA0075007B /* Sources */,
+				A89C74581CD856DA0075007B /* Frameworks */,
+				A89C74591CD856DA0075007B /* Headers */,
 			);
 			buildRules = (
 			);
@@ -84,8 +128,8 @@
 			);
 			name = CryptoMalloc;
 			productName = CryptoMalloc;
-			productReference = A89C743F1CD82FF50075007B /* CryptoMalloc */;
-			productType = "com.apple.product-type.tool";
+			productReference = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
 		};
 /* End PBXNativeTarget section */
 
@@ -96,7 +140,10 @@
 				LastUpgradeCheck = 0720;
 				ORGANIZATIONNAME = "Denis Lavrov";
 				TargetAttributes = {
-					A89C743E1CD82FF50075007B = {
+					A89C744F1CD8561B0075007B = {
+						CreatedOnToolsVersion = 7.2.1;
+					};
+					A89C745A1CD856DA0075007B = {
 						CreatedOnToolsVersion = 7.2.1;
 					};
 				};
@@ -113,18 +160,26 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A89C743E1CD82FF50075007B /* CryptoMalloc */,
+				A89C744F1CD8561B0075007B /* CryptoMallocTest */,
+				A89C745A1CD856DA0075007B /* CryptoMalloc */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A89C743B1CD82FF50075007B /* Sources */ = {
+		A89C744C1CD8561B0075007B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A89C74431CD82FF50075007B /* main.c in Sources */,
-				A89C744B1CD831D80075007B /* cor_map.c in Sources */,
+				A89C74531CD8561B0075007B /* main.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A89C74571CD856DA0075007B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A89C74621CD857320075007B /* main.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,16 +265,36 @@
 			};
 			name = Release;
 		};
-		A89C74471CD82FF50075007B /* Debug */ = {
+		A89C74541CD8561B0075007B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
 		};
-		A89C74481CD82FF50075007B /* Release */ = {
+		A89C74551CD8561B0075007B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		A89C745D1CD856DA0075007B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		A89C745E1CD856DA0075007B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
@@ -236,14 +311,21 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A89C74461CD82FF50075007B /* Build configuration list for PBXNativeTarget "CryptoMalloc" */ = {
+		A89C74561CD8561B0075007B /* Build configuration list for PBXNativeTarget "CryptoMallocTest" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A89C74471CD82FF50075007B /* Debug */,
-				A89C74481CD82FF50075007B /* Release */,
+				A89C74541CD8561B0075007B /* Debug */,
+				A89C74551CD8561B0075007B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+		};
+		A89C745C1CD856DA0075007B /* Build configuration list for PBXNativeTarget "CryptoMalloc" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A89C745D1CD856DA0075007B /* Debug */,
+				A89C745E1CD856DA0075007B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
 		};
 /* End XCConfigurationList section */
 	};

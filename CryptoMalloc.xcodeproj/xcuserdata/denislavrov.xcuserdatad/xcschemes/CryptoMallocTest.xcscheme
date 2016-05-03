@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A89C745A1CD856DA0075007B"
-               BuildableName = "libCryptoMalloc.dylib"
-               BlueprintName = "CryptoMalloc"
+               BlueprintIdentifier = "A89C744F1CD8561B0075007B"
+               BuildableName = "CryptoMallocTest"
+               BlueprintName = "CryptoMallocTest"
                ReferencedContainer = "container:CryptoMalloc.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A89C745A1CD856DA0075007B"
-            BuildableName = "libCryptoMalloc.dylib"
-            BlueprintName = "CryptoMalloc"
+            BlueprintIdentifier = "A89C744F1CD8561B0075007B"
+            BuildableName = "CryptoMallocTest"
+            BlueprintName = "CryptoMallocTest"
             ReferencedContainer = "container:CryptoMalloc.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -55,19 +55,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A89C745A1CD856DA0075007B"
-            BuildableName = "libCryptoMalloc.dylib"
-            BlueprintName = "CryptoMalloc"
+            BlueprintIdentifier = "A89C744F1CD8561B0075007B"
+            BuildableName = "CryptoMallocTest"
+            BlueprintName = "CryptoMallocTest"
             ReferencedContainer = "container:CryptoMalloc.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "DYLD_INSERT_LIBRARIES"
-            value = "libcryptomalloc.dylib"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
       <AdditionalOptions>
       </AdditionalOptions>
    </LaunchAction>
@@ -81,9 +74,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A89C745A1CD856DA0075007B"
-            BuildableName = "libCryptoMalloc.dylib"
-            BlueprintName = "CryptoMalloc"
+            BlueprintIdentifier = "A89C744F1CD8561B0075007B"
+            BuildableName = "CryptoMallocTest"
+            BlueprintName = "CryptoMallocTest"
             ReferencedContainer = "container:CryptoMalloc.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
