@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <assert.h>
 
 static pthread_mutex_t mymutex=PTHREAD_MUTEX_INITIALIZER;
 
@@ -88,27 +89,19 @@ __attribute__((destructor))
 static void crypto_malloc_dtor(){
 	cor_map_node *current = mem_map.first;
 	while (current != NULL) {
-		//free(current->key);
+		free(current->key);
 		current = current->next;
 	}
 }
 
 void* malloc(size_t size){
-	/*
-	if (!libc_malloc){
-		libc_malloc = dlsym(RTLD_NEXT, "malloc");
-		libc_calloc = dlsym(RTLD_NEXT, "realloc");
-		libc_realloc = dlsym(RTLD_NEXT, "calloc");
-		libc_free = dlsym(RTLD_NEXT, "free");
-	}
-	 */
 	if (size == 0) return NULL;
 	size = size + sizeof(cor_map_node);
-	size = ((size / 4096L) + 1L) * 4096;
+	// size = ((size / 4096L) + 1L) * 4096; // I thought it should be page aligned :(
 	pthread_mutex_lock(&mymutex);
     char path[200];
     sprintf(path, "%s%016lx.mem", CRYPTO_PATH, __crypto_allocid++);
-	int fnum = open(path, O_RDWR | O_CREAT | O_SYNC | O_TRUNC, S_IRWXU); // O_DIRECT for linux?
+	int fnum = open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (fnum < 0) {
 		perror("Open");
 	}
@@ -116,6 +109,7 @@ void* malloc(size_t size){
     write(fnum, &fend, 1);
     fsync(fnum);
     void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fnum, 0);
+	close(fnum);
     if (crypto_mem != MAP_FAILED) {
 		((cor_map_node*)crypto_mem)->key = crypto_mem + sizeof(cor_map_node);
 		((cor_map_node*)crypto_mem)->fd = fnum;
@@ -123,12 +117,11 @@ void* malloc(size_t size){
 		((cor_map_node*)crypto_mem)->alloc_size = size;
         cor_map_set(&mem_map, (cor_map_node*)crypto_mem);
 		pthread_mutex_unlock(&mymutex);
-		//printf("Malloc Succeded %lu\n", node.allocid);
         return crypto_mem + sizeof(cor_map_node);
     } else {
 		perror("mmap");
 		printf("File Descriptor is: %d, %lu\n", fnum, __crypto_allocid-1);
-        close(fnum);
+        //close(fnum);
 		pthread_mutex_unlock(&mymutex);
 		errno = ENOMEM;
         return NULL;
@@ -150,6 +143,7 @@ void free(void *ptr){
 		sprintf(path, "%s%016lx.mem", CRYPTO_PATH, node.allocid);
 		//unlink(path);
 	} else {
+		// It really should never go here, but its left as a precaution
 		printf("LIBC FREE\n");
 		libc_free(ptr);
 	}
@@ -158,7 +152,7 @@ void free(void *ptr){
 
 // TODO: Use a more sophisticated realloc, for better performance
 void *realloc(void *ptr, size_t size){
-	printf("IT CALLED REALLOC\n");
+	//printf("IT CALLED REALLOC\n");
 	if (ptr == NULL) return malloc(size);
 	if (size == 0){
 		free(ptr);
@@ -177,18 +171,17 @@ void *realloc(void *ptr, size_t size){
 		free(ptr);
 		return new;
 	}
+	// It really should never go here, but its left as a precaution
 	printf("LIBC REALLOC\n");
 	return libc_realloc(ptr, size);
 }
 
 void *calloc(size_t count, size_t size){
-	printf("Calloc was called\n");
+	//printf("Calloc was called\n");
 	if (count == 0 || size == 0) return NULL;
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
-	if (result == NULL) {
-		printf("OOPS\n");
-	}
+	assert(result != NULL);
 	memset(result, 0, fsize);
 	return result;
 }
