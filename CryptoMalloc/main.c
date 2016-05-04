@@ -26,15 +26,11 @@ static void *(*libc_realloc)(void *, size_t);
 static void *(*libc_calloc)(size_t, size_t);
 static void (*libc_free)(void *);
 
-typedef struct MemNode{
-    int				fd;
-	unsigned long	allocid;
-    size_t			alloc_size;
-} MemNode;
-
 typedef struct cor_map_node {
     void			*key;
-	MemNode			node;
+	int				fd;
+	unsigned long	allocid;
+	size_t			alloc_size;
     struct cor_map_node *next;
 } cor_map_node;
 
@@ -43,11 +39,11 @@ typedef struct cor_map{
     cor_map_node *last;
 } cor_map;
 
-static int cor_map_get(cor_map* map, void *key, MemNode *node){
+static int cor_map_get(cor_map* map, cor_map_node *node){
     cor_map_node *np = map->first;
     while (np != NULL) {
-        if (np->key == key) {
-			*node = np->node;
+        if (np->key == node->key) {
+			*node = *np;
             return 1;
         }
         np = np->next;
@@ -55,24 +51,14 @@ static int cor_map_get(cor_map* map, void *key, MemNode *node){
     return 0;
 }
 
-static cor_map_node *create_node(void *key, MemNode *node){
-	if (libc_malloc == NULL){
-		printf("libc malloc was not retrieved");
-	}
-    cor_map_node *mnode = libc_malloc(sizeof(cor_map_node));
-    mnode->key = key;
-	mnode->node = *node;
-    mnode->next = NULL;
-    return mnode;
-}
-
-static void cor_map_set(cor_map* map, void *key, MemNode *node){
+static void cor_map_set(cor_map* map, cor_map_node *node){
+	node->next = NULL;
 	if (map->first == NULL) {
-		map->first = create_node(key, node);
+		map->first = node;
 		map->last = map->first;
 	} else {
 		cor_map_node *last_node = map->last;
-		last_node->next = create_node(key, node);
+		last_node->next = node;
 		map->last = last_node->next;
 	}
 }
@@ -117,23 +103,31 @@ void* malloc(size_t size){
 	}
 	 */
 	if (size == 0) return NULL;
+	size = size + sizeof(cor_map_node);
 	size = ((size / 4096L) + 1L) * 4096;
 	pthread_mutex_lock(&mymutex);
     char path[200];
     sprintf(path, "%s%016lx.mem", CRYPTO_PATH, __crypto_allocid++);
 	int fnum = open(path, O_RDWR | O_CREAT | O_SYNC | O_TRUNC, S_IRWXU); // O_DIRECT for linux?
+	if (fnum < 0) {
+		perror("Open");
+	}
     lseek(fnum, size - 1, SEEK_SET);
     write(fnum, &fend, 1);
     fsync(fnum);
     void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fnum, 0);
     if (crypto_mem != MAP_FAILED) {
-		MemNode node = {fnum, __crypto_allocid - 1, size};
-        cor_map_set(&mem_map, crypto_mem, &node);
+		((cor_map_node*)crypto_mem)->key = crypto_mem + sizeof(cor_map_node);
+		((cor_map_node*)crypto_mem)->fd = fnum;
+		((cor_map_node*)crypto_mem)->allocid = __crypto_allocid - 1;
+		((cor_map_node*)crypto_mem)->alloc_size = size;
+        cor_map_set(&mem_map, (cor_map_node*)crypto_mem);
 		pthread_mutex_unlock(&mymutex);
 		//printf("Malloc Succeded %lu\n", node.allocid);
-        return crypto_mem;
+        return crypto_mem + sizeof(cor_map_node);
     } else {
-		//printf("Malloc Failed\n");
+		perror("mmap");
+		printf("File Descriptor is: %d, %lu\n", fnum, __crypto_allocid-1);
         close(fnum);
 		pthread_mutex_unlock(&mymutex);
 		errno = ENOMEM;
@@ -145,10 +139,12 @@ void free(void *ptr){
 	if (ptr == NULL) return;
     //assert(mem_map != NULL);
 	pthread_mutex_lock(&mymutex);
-    MemNode node;
-	if (cor_map_get(&mem_map, ptr, &node) == 1){
+    cor_map_node node;
+	node.key = ptr;
+	void *saddr = ptr - sizeof(cor_map_node);
+	if (cor_map_get(&mem_map, &node) == 1){
 		//printf("FOUND NODE %lu\n", node.alloc_size);
-		//munmap(ptr, node.alloc_size); UNCOMMENT AFTER DONE TESTING
+		//munmap(node.key, node.alloc_size); UNCOMMENT AFTER DONE TESTING
 		//close(node.fd);
 		char path[200];
 		sprintf(path, "%s%016lx.mem", CRYPTO_PATH, node.allocid);
@@ -162,17 +158,22 @@ void free(void *ptr){
 
 // TODO: Use a more sophisticated realloc, for better performance
 void *realloc(void *ptr, size_t size){
-	//printf("IT CALLED REALLOC\n");
+	printf("IT CALLED REALLOC\n");
 	if (ptr == NULL) return malloc(size);
 	if (size == 0){
 		free(ptr);
 		return NULL;
 	}
-	MemNode node;
+	cor_map_node node;
+	node.key = ptr;
 	void *new = NULL;
-	if (cor_map_get(&mem_map, ptr, &node)){
+	if (cor_map_get(&mem_map, &node)){
+		size_t node_size = node.alloc_size - sizeof(cor_map_node);
 		new = malloc(size);
-		memcpy(new, ptr, node.alloc_size < size ? node.alloc_size : size);
+		if (new == NULL) {
+			printf("MALLOC RETURNED ZERO %zu\n", size);
+		}
+		memcpy(new, ptr, node_size < size ? node_size : size);
 		free(ptr);
 		return new;
 	}
