@@ -10,8 +10,8 @@
 		A80B35E71CD8D0E100E5600F /* libCryptoMalloc.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 		A80B35E91CD8D13500E5600F /* libCryptoMalloc.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 		A89C74531CD8561B0075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74521CD8561B0075007B /* main.c */; };
-		A89C745F1CD857050075007B /* libCryptoMalloc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 		A89C74621CD857320075007B /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = A89C74421CD82FF50075007B /* main.c */; };
+		A89C746B1CD97E050075007B /* libCryptoMalloc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -42,6 +42,7 @@
 		A89C74501CD8561B0075007B /* CryptoMallocTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CryptoMallocTest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A89C74521CD8561B0075007B /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libCryptoMalloc.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		A89C74671CD95B8A0075007B /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,7 +50,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A89C745F1CD857050075007B /* libCryptoMalloc.dylib in Frameworks */,
+				A89C746B1CD97E050075007B /* libCryptoMalloc.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,6 +67,7 @@
 		A89C74361CD82FF50075007B = {
 			isa = PBXGroup;
 			children = (
+				A89C74671CD95B8A0075007B /* Makefile */,
 				A89C74411CD82FF50075007B /* CryptoMalloc */,
 				A89C74511CD8561B0075007B /* CryptoMallocTest */,
 				A89C74401CD82FF50075007B /* Products */,
@@ -296,6 +298,7 @@
 		A89C745D1CD856DA0075007B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				EXECUTABLE_PREFIX = lib;
