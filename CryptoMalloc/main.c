@@ -29,7 +29,6 @@ static void (*libc_free)(void *);
 
 typedef struct cor_map_node {
     void			*key;
-	int				fd;
 	unsigned long	allocid;
 	size_t			alloc_size;
     struct cor_map_node *next;
@@ -37,38 +36,44 @@ typedef struct cor_map_node {
 
 typedef struct cor_map{
     cor_map_node *first;
-    cor_map_node *last;
 } cor_map;
 
-static int cor_map_get(cor_map* map, cor_map_node *node){
-    cor_map_node *np = map->first;
-    while (np != NULL) {
-        if (np->key == node->key) {
-			*node = *np;
-            return 1;
-        }
-        np = np->next;
-    }
-    return 0;
+static cor_map_node *cor_map_delete(cor_map* map, void* key){
+	cor_map_node *pnp;
+	cor_map_node *np;
+	for (np = map->first, pnp = map->first; np != NULL; pnp = np, np = np->next){
+		if (np->key == key) {
+			if (np == map->first){
+				map->first = np->next;
+			} else {
+				pnp->next = np->next;
+			}
+			return np;
+		}
+	}
+	return NULL;
 }
 
-static void cor_map_set(cor_map* map, cor_map_node *node){
-	node->next = NULL;
-	if (map->first == NULL) {
-		map->first = node;
-		map->last = map->first;
-	} else {
-		cor_map_node *last_node = map->last;
-		last_node->next = node;
-		map->last = last_node->next;
+static cor_map_node *cor_map_get(cor_map* map, void* key){
+	cor_map_node *np;
+	for (np = map->first; np != NULL; np = np->next){
+		if (np->key == key) {
+			return np;
+		}
 	}
+	return NULL;
+}
+
+static void cor_map_set(cor_map* map, cor_map_node *node){ // can be inlined
+	node->next = map->first;
+	map->first = node;
 }
 
 
 static char *CRYPTO_PATH = "/Volumes/CryptoDisk/";
 static int PAGE_SIZE;
 static volatile unsigned long __crypto_allocid = 0;
-static cor_map mem_map;
+static cor_map mem_map = {NULL};
 static const char fend = 0;
 
 __attribute__((constructor))
@@ -87,12 +92,9 @@ static void crypto_malloc_ctor(){
 
 __attribute__((destructor))
 static void crypto_malloc_dtor(){
-	cor_map_node *current = mem_map.first;
-	while (current != NULL) {
-		free(current->key);
-		current = current->next;
-	}
+	// not for leak management, just for wiping files;
 }
+
 
 void* malloc(size_t size){
 	if (size == 0) return NULL;
@@ -112,7 +114,6 @@ void* malloc(size_t size){
 	close(fnum);
     if (crypto_mem != MAP_FAILED) {
 		((cor_map_node*)crypto_mem)->key = crypto_mem + sizeof(cor_map_node);
-		((cor_map_node*)crypto_mem)->fd = fnum;
 		((cor_map_node*)crypto_mem)->allocid = __crypto_allocid - 1;
 		((cor_map_node*)crypto_mem)->alloc_size = size;
         cor_map_set(&mem_map, (cor_map_node*)crypto_mem);
@@ -129,23 +130,27 @@ void* malloc(size_t size){
 }
 
 void free(void *ptr){
+	/*
+	Some code relies on how free works, free doesnt discard memory straight away
+	it keeps the most recent free bit of memory and it can still be referenced
+	this is done for the purposes of realloc implementation in Linux
+	
+	*** THIS ONE DOESNT DO THAT ***
+	Hence some software that relies on it (which it shouldn't, will crash)
+	*/
 	if (ptr == NULL) return;
-    //assert(mem_map != NULL);
 	pthread_mutex_lock(&mymutex);
-    cor_map_node node;
-	node.key = ptr;
-	void *saddr = ptr - sizeof(cor_map_node);
-	if (cor_map_get(&mem_map, &node) == 1){
+    cor_map_node *node;
+	if ((node = cor_map_delete(&mem_map, ptr)) != NULL){
 		//printf("FOUND NODE %lu\n", node.alloc_size);
-		//munmap(node.key, node.alloc_size); UNCOMMENT AFTER DONE TESTING
-		//close(node.fd);
-		char path[200];
-		sprintf(path, "%s%016lx.mem", CRYPTO_PATH, node.allocid);
+		//munmap(node, node->alloc_size); //UNCOMMENT AFTER DONE TESTING
+		//char path[200];
+		//sprintf(path, "%s%016lx.mem", CRYPTO_PATH, node.allocid);
 		//unlink(path);
 	} else {
 		// It really should never go here, but its left as a precaution
 		printf("LIBC FREE\n");
-		libc_free(ptr);
+		//libc_free(ptr);
 	}
 	pthread_mutex_unlock(&mymutex);
 }
@@ -158,11 +163,10 @@ void *realloc(void *ptr, size_t size){
 		free(ptr);
 		return NULL;
 	}
-	cor_map_node node;
-	node.key = ptr;
+	cor_map_node *node;
 	void *new = NULL;
-	if (cor_map_get(&mem_map, &node)){
-		size_t node_size = node.alloc_size - sizeof(cor_map_node);
+	if ((node = cor_map_get(&mem_map, ptr)) != NULL){
+		size_t node_size = node->alloc_size - sizeof(cor_map_node);
 		new = malloc(size);
 		if (new == NULL) {
 			printf("MALLOC RETURNED ZERO %zu\n", size);
