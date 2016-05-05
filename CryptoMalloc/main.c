@@ -133,23 +133,16 @@ void* malloc(size_t size){
 }
 
 void free(void *ptr){
-	/*
-	Some code relies on how free works, free doesnt discard memory straight away
-	it keeps the most recent free bit of memory and it can still be referenced
-	this is done for the purposes of realloc implementation in Linux
-	
-	*** THIS ONE DOESNT DO THAT ***
-	Hence some software that relies on it (which it shouldn't, will crash)
-	*/
 	if (ptr == NULL) return;
 	pthread_mutex_lock(&mymutex);
+	static cor_map_node *previous = NULL;
+	if (previous != NULL) {
+		munmap(previous, previous->alloc_size);
+		previous = NULL;
+	}
     cor_map_node *node;
 	if ((node = cor_map_delete(&mem_map, ptr)) != NULL){
-		//printf("FOUND NODE %lu\n", node.alloc_size);
-		//munmap(node, node->alloc_size); //UNCOMMENT AFTER DONE TESTING
-		//char path[200];
-		//sprintf(path, "%s%016lx.mem", CRYPTO_PATH, node.allocid);
-		//unlink(path);
+		previous = node;
 	} else {
 		// It really should never go here, but its left as a precaution
 		printf("LIBC FREE\n");
@@ -188,6 +181,6 @@ void *calloc(size_t count, size_t size){
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
 	assert(result != NULL);
-	memset(result, 0, fsize);
+	//memset(result, 0, fsize); //allocated file should be zerod...
 	return result;
 }
