@@ -20,12 +20,14 @@
 #include <errno.h>
 #include <assert.h>
 
-static pthread_mutex_t mymutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* These are no longer used, CryptoMalloc does not use normal malloc
 static void *(*libc_malloc)(size_t);
 static void *(*libc_realloc)(void *, size_t);
 static void *(*libc_calloc)(size_t, size_t);
 static void (*libc_free)(void *);
+*/
 
 typedef struct cor_map_node {
     void			*key;
@@ -83,10 +85,12 @@ static void crypto_malloc_ctor(){
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
 	}
+	/* These are no longer used, CryptoMalloc does not use normal malloc
 	*(void **)&libc_malloc = dlsym(RTLD_NEXT, "malloc");
 	*(void **)&libc_realloc = dlsym(RTLD_NEXT, "realloc");
 	*(void **)&libc_calloc = dlsym(RTLD_NEXT, "calloc");
 	*(void **)&libc_free = dlsym(RTLD_NEXT, "free");
+	*/
 }
 
 
@@ -99,7 +103,6 @@ static void crypto_malloc_dtor(){
 void* malloc(size_t size){
 	if (size == 0) return NULL;
 	size = size + sizeof(cor_map_node);
-	// size = ((size / 4096L) + 1L) * 4096; // I thought it should be page aligned :(
 	pthread_mutex_lock(&mymutex);
     char path[200];
     sprintf(path, "%s%016lx.mem", CRYPTO_PATH, __crypto_allocid++);
@@ -150,7 +153,6 @@ void free(void *ptr){
 	} else {
 		// It really should never go here, but its left as a precaution
 		printf("LIBC FREE\n");
-		//libc_free(ptr);
 	}
 	pthread_mutex_unlock(&mymutex);
 }
@@ -169,7 +171,7 @@ void *realloc(void *ptr, size_t size){
 		size_t node_size = node->alloc_size - sizeof(cor_map_node);
 		new = malloc(size);
 		if (new == NULL) {
-			printf("MALLOC RETURNED ZERO %zu\n", size);
+			printf("MALLOC RETURNED NULL %zu\n", size);
 		}
 		memcpy(new, ptr, node_size < size ? node_size : size);
 		free(ptr);
@@ -177,7 +179,7 @@ void *realloc(void *ptr, size_t size){
 	}
 	// It really should never go here, but its left as a precaution
 	printf("LIBC REALLOC\n");
-	return libc_realloc(ptr, size);
+	return NULL;
 }
 
 void *calloc(size_t count, size_t size){
