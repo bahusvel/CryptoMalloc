@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <signal.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -28,6 +29,7 @@ static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct cor_map_node {
     void			*key;
+	void			*cryptoaddr;
 	unsigned long	allocid;
 	size_t			alloc_size;
     struct cor_map_node *next;
@@ -69,27 +71,63 @@ static void cor_map_set(cor_map* map, cor_map_node *node){ // can be inlined
 }
 
 
-static char *CRYPTO_PATH = "/Volumes/CryptoDisk/";
+static char *CRYPTO_PATH = "/Users/denislavrov/Desktop/RAM/";
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static volatile unsigned long __crypto_allocid = 0;
 static cor_map mem_map = {NULL};
 static const char fend = 0;
 static int fd = -1;
+static struct sigaction old_handler;
+static pthread_t encryptor_thread;
+
+static void fault_handler(int signum, siginfo_t *info, void *context){
+	void *address = info->si_addr;
+	printf("Real Seg Fault Happened :(\n");
+	old_handler.sa_sigaction(signum, info, context);
+}
+
+static void encryptor(void *ptr){
+	while (1) {
+		printf("Encryptor is spinning\n");
+		usleep(1000);
+	}
+}
 
 __attribute__((constructor))
 static void crypto_malloc_ctor(){
 	PAGE_SIZE = getpagesize();
+	// change this to temp
 	char *envPath = getenv("CRYPTO_PATH");
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
 	}
+	
 	sprintf(PID_PATH, "%s%d.mem", CRYPTO_PATH, getpid());
 	fd = open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (fd < 0) {
 		perror("Open");
 		abort();
 	}
+	
+	// setting up signal handler
+	static struct sigaction sa;
+	sa.sa_sigaction = fault_handler;
+	sigemptyset(&sa.sa_mask);
+	sigaddset(&sa.sa_mask, SIGSEGV);
+	sa.sa_flags = SA_SIGINFO;
+	
+	if (sigaction(SIGSEGV, &sa, &old_handler) < 0){
+		perror("Signal Handler Installation Failed:");
+		abort();
+	}
+	
+	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
+	if(iret){
+		printf("Error - pthread_create() return code: %d\n",iret);
+		exit(EXIT_FAILURE);
+	}
+
 }
 
 
@@ -102,6 +140,7 @@ static void crypto_malloc_dtor(){
 
 void* malloc(size_t size){
 	if (size == 0) return NULL;
+	// TODO: may need to check if the right segfault handler is set
 	size = size + sizeof(cor_map_node);
 	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
 	pthread_mutex_lock(&mymutex);
@@ -114,15 +153,17 @@ void* malloc(size_t size){
     write(fd, &fend, 1);
     fsync(fd);
 	
-    void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
+    void *user_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
+	void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
 	
-    if (crypto_mem != MAP_FAILED) {
-		((cor_map_node*)crypto_mem)->key = crypto_mem + sizeof(cor_map_node);
-		((cor_map_node*)crypto_mem)->allocid = __crypto_allocid - 1;
-		((cor_map_node*)crypto_mem)->alloc_size = size;
-        cor_map_set(&mem_map, (cor_map_node*)crypto_mem);
+    if (user_mem != MAP_FAILED) {
+		((cor_map_node*)user_mem)->key = user_mem + sizeof(cor_map_node);
+		((cor_map_node*)user_mem)->cryptoaddr = crypto_mem;
+		((cor_map_node*)user_mem)->allocid = __crypto_allocid - 1;
+		((cor_map_node*)user_mem)->alloc_size = size;
+        cor_map_set(&mem_map, (cor_map_node*)user_mem);
 		pthread_mutex_unlock(&mymutex);
-        return crypto_mem + sizeof(cor_map_node);
+        return user_mem + sizeof(cor_map_node);
     } else {
 		perror("mmap");
 		errno = ENOMEM;

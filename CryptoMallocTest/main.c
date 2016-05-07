@@ -4,8 +4,10 @@
 
 int main(int argc, const char * argv[]) {
 	char *str;
+	char *orig;
 	
 	str = (char *) malloc(15);
+	orig = str;
 	strcpy(str, "tutorialspoint");
 	printf("String = %s,  Address = %u\n", str, str);
 
