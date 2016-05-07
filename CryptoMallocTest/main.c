@@ -18,7 +18,9 @@ int main(int argc, const char * argv[]) {
 	gettimeofday(&start, NULL);
 	char first = str[0];
 	gettimeofday(&stop, NULL);
-	printf("Decryption took: %d us\n", stop.tv_usec - start.tv_usec);
+	unsigned long stime = 1000000 * start.tv_sec + start.tv_usec;
+	unsigned long ftime = 1000000 * stop.tv_sec + stop.tv_usec;
+	printf("Decryption took: %ld us\n", ftime - stime);
 	//
 	strcat(str, ".com");
 	printf("String = %s,  Address = %u\n", str, str);

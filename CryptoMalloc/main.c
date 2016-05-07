@@ -64,7 +64,7 @@ static cor_map_node *cor_map_get(cor_map* map, void* key){
 	return NULL;
 }
 
-static void cor_map_set(cor_map* map, cor_map_node *node){ // can be inlined
+static inline void cor_map_set(cor_map* map, cor_map_node *node){ // can be inlined
 	node->next = map->first;
 	map->first = node;
 }
@@ -81,6 +81,7 @@ static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
 static void decryptor(int signum, siginfo_t *info, void *context){
+	// code here must be heavily optimised, page fault code !!!
 	void *address = info->si_addr;
 	if (address == NULL) goto segfault;
 	cor_map_node *np;
@@ -93,7 +94,7 @@ static void decryptor(int signum, siginfo_t *info, void *context){
 	pthread_mutex_unlock(&mymutex);
 	goto segfault;
 decrypt:
-	printf("Decrypting your ram\n");
+	//printf("Decrypting your ram\n");
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
 	pthread_mutex_unlock(&mymutex);
 	return;
@@ -105,12 +106,11 @@ segfault:
 
 static void encryptor(void *ptr){
 	while (1) {
-		printf("Encryptor is spinning\n");
+		//printf("Encryptor is spinning\n");
 		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next){
 			mprotect(np->key, np->alloc_size, PROT_NONE);
-			printf("Protected!\n");
 		}
 		pthread_mutex_unlock(&mymutex);
 		usleep(1000000);
@@ -161,7 +161,7 @@ static void crypto_malloc_dtor(){
 }
 
 
-void* malloc(size_t size){
+void *malloc(size_t size){
 	if (size == 0) return NULL;
 	// TODO: may need to check if the right segfault handler is set
 	size = size + sizeof(cor_map_node);
