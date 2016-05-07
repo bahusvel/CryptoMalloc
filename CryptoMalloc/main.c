@@ -97,15 +97,13 @@ __attribute__((destructor))
 static void crypto_malloc_dtor(){
 	close(fd);
 	unlink(PID_PATH);
-	// not for leak management, just for wiping files;
-	
 }
 
 
 void* malloc(size_t size){
 	if (size == 0) return NULL;
 	size = size + sizeof(cor_map_node);
-	size = ((size / 4096L) + 1L) * 4096; // must be page aligned for offset
+	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
 	pthread_mutex_lock(&mymutex);
     off_t new_offset = lseek(fd, size - 1, SEEK_END);
 	if (new_offset < 0){
