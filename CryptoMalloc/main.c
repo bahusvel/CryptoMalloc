@@ -20,14 +20,11 @@
 #include <errno.h>
 #include <assert.h>
 
-static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
-/* These are no longer used, CryptoMalloc does not use normal malloc
-static void *(*libc_malloc)(size_t);
-static void *(*libc_realloc)(void *, size_t);
-static void *(*libc_calloc)(size_t, size_t);
-static void (*libc_free)(void *);
-*/
+static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct cor_map_node {
     void			*key;
@@ -73,10 +70,12 @@ static void cor_map_set(cor_map* map, cor_map_node *node){ // can be inlined
 
 
 static char *CRYPTO_PATH = "/Volumes/CryptoDisk/";
+static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static volatile unsigned long __crypto_allocid = 0;
 static cor_map mem_map = {NULL};
 static const char fend = 0;
+static int fd = -1;
 
 __attribute__((constructor))
 static void crypto_malloc_ctor(){
@@ -85,36 +84,40 @@ static void crypto_malloc_ctor(){
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
 	}
-	/* These are no longer used, CryptoMalloc does not use normal malloc
-	*(void **)&libc_malloc = dlsym(RTLD_NEXT, "malloc");
-	*(void **)&libc_realloc = dlsym(RTLD_NEXT, "realloc");
-	*(void **)&libc_calloc = dlsym(RTLD_NEXT, "calloc");
-	*(void **)&libc_free = dlsym(RTLD_NEXT, "free");
-	*/
+	sprintf(PID_PATH, "%s%d.mem", CRYPTO_PATH, getpid());
+	fd = open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+	if (fd < 0) {
+		perror("Open");
+		abort();
+	}
 }
 
 
 __attribute__((destructor))
 static void crypto_malloc_dtor(){
+	close(fd);
+	unlink(PID_PATH);
 	// not for leak management, just for wiping files;
+	
 }
 
 
 void* malloc(size_t size){
 	if (size == 0) return NULL;
 	size = size + sizeof(cor_map_node);
+	size = ((size / 4096L) + 1L) * 4096; // must be page aligned for offset
 	pthread_mutex_lock(&mymutex);
-    char path[200];
-    sprintf(path, "%s%016lx.mem", CRYPTO_PATH, __crypto_allocid++);
-	int fnum = open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
-	if (fnum < 0) {
-		perror("Open");
+    off_t new_offset = lseek(fd, size - 1, SEEK_END);
+	if (new_offset < 0){
+		perror("Could not seek");
+		return NULL;
 	}
-    lseek(fnum, size - 1, SEEK_SET);
-    write(fnum, &fend, 1);
-    fsync(fnum);
-    void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fnum, 0);
-	close(fnum);
+	off_t foffset = new_offset - (size - 1);
+    write(fd, &fend, 1);
+    fsync(fd);
+	
+    void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
+	
     if (crypto_mem != MAP_FAILED) {
 		((cor_map_node*)crypto_mem)->key = crypto_mem + sizeof(cor_map_node);
 		((cor_map_node*)crypto_mem)->allocid = __crypto_allocid - 1;
@@ -124,10 +127,8 @@ void* malloc(size_t size){
         return crypto_mem + sizeof(cor_map_node);
     } else {
 		perror("mmap");
-		printf("File Descriptor is: %d, %lu\n", fnum, __crypto_allocid-1);
-        //close(fnum);
-		pthread_mutex_unlock(&mymutex);
 		errno = ENOMEM;
+		pthread_mutex_unlock(&mymutex);
         return NULL;
     }
 }
