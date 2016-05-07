@@ -30,7 +30,6 @@ static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 typedef struct cor_map_node {
     void			*key;
 	void			*cryptoaddr;
-	unsigned long	allocid;
 	size_t			alloc_size;
     struct cor_map_node *next;
 } cor_map_node;
@@ -81,16 +80,40 @@ static int fd = -1;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
-static void fault_handler(int signum, siginfo_t *info, void *context){
+static void decryptor(int signum, siginfo_t *info, void *context){
 	void *address = info->si_addr;
+	if (address == NULL) goto segfault;
+	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
+	for (np = mem_map.first; np != NULL; np = np->next){
+		if (np->key <= address && address <= (np->key + np->alloc_size)){
+			goto decrypt;
+		}
+	}
+	pthread_mutex_unlock(&mymutex);
+	goto segfault;
+decrypt:
+	printf("Decrypting your ram\n");
+	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
+	pthread_mutex_unlock(&mymutex);
+	return;
+segfault:
 	printf("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
+	return;
 }
 
 static void encryptor(void *ptr){
 	while (1) {
 		printf("Encryptor is spinning\n");
-		usleep(1000);
+		cor_map_node *np;
+		pthread_mutex_lock(&mymutex);
+		for (np = mem_map.first; np != NULL; np = np->next){
+			mprotect(np->key, np->alloc_size, PROT_NONE);
+			printf("Protected!\n");
+		}
+		pthread_mutex_unlock(&mymutex);
+		usleep(1000000);
 	}
 }
 
@@ -112,7 +135,7 @@ static void crypto_malloc_ctor(){
 	
 	// setting up signal handler
 	static struct sigaction sa;
-	sa.sa_sigaction = fault_handler;
+	sa.sa_sigaction = decryptor;
 	sigemptyset(&sa.sa_mask);
 	sigaddset(&sa.sa_mask, SIGSEGV);
 	sa.sa_flags = SA_SIGINFO;
@@ -157,11 +180,11 @@ void* malloc(size_t size){
 	void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
 	
     if (user_mem != MAP_FAILED) {
-		((cor_map_node*)user_mem)->key = user_mem + sizeof(cor_map_node);
-		((cor_map_node*)user_mem)->cryptoaddr = crypto_mem;
-		((cor_map_node*)user_mem)->allocid = __crypto_allocid - 1;
-		((cor_map_node*)user_mem)->alloc_size = size;
-        cor_map_set(&mem_map, (cor_map_node*)user_mem);
+		cor_map_node *head_node = crypto_mem;
+		head_node->key = user_mem;
+		head_node->cryptoaddr = crypto_mem;
+		head_node->alloc_size = size;
+        cor_map_set(&mem_map, head_node);
 		pthread_mutex_unlock(&mymutex);
         return user_mem + sizeof(cor_map_node);
     } else {
@@ -174,10 +197,12 @@ void* malloc(size_t size){
 
 void free(void *ptr){
 	if (ptr == NULL) return;
+	ptr -= sizeof(cor_map_node);
 	pthread_mutex_lock(&mymutex);
 	static cor_map_node *previous = NULL;
 	if (previous != NULL) {
-		munmap(previous, previous->alloc_size);
+		munmap(previous->key, previous->alloc_size);
+		munmap(previous->cryptoaddr, previous->alloc_size);
 		previous = NULL;
 	}
     cor_map_node *node;
@@ -198,9 +223,10 @@ void *realloc(void *ptr, size_t size){
 		free(ptr);
 		return NULL;
 	}
+	void *user_ptr = ptr - sizeof(cor_map_node);
 	cor_map_node *node;
 	void *new = NULL;
-	if ((node = cor_map_get(&mem_map, ptr)) != NULL){
+	if ((node = cor_map_get(&mem_map, user_ptr)) != NULL){
 		size_t node_size = node->alloc_size - sizeof(cor_map_node);
 		new = malloc(size);
 		if (new == NULL) {
