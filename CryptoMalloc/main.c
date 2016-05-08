@@ -183,7 +183,6 @@ static void crypto_malloc_dtor(){
 void *malloc(size_t size){
 	if (size == 0) return NULL;
 	// TODO: may need to check if the right segfault handler is set
-	size = size + sizeof(cor_map_node);
 	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
 	pthread_mutex_lock(&mymutex);
     off_t new_offset = lseek(fd, size - 1, SEEK_END);
@@ -199,13 +198,13 @@ void *malloc(size_t size){
 	void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
 	
     if (user_mem != MAP_FAILED) {
-		cor_map_node *head_node = crypto_mem;
+		cor_map_node *head_node = __libc_malloc(sizeof(cor_map_node));
 		head_node->key = user_mem;
 		head_node->cryptoaddr = crypto_mem;
 		head_node->alloc_size = size;
         cor_map_set(&mem_map, head_node);
 		pthread_mutex_unlock(&mymutex);
-        return user_mem + sizeof(cor_map_node);
+        return user_mem;
     } else {
 		perror("mmap");
 		errno = ENOMEM;
@@ -216,12 +215,12 @@ void *malloc(size_t size){
 
 void free(void *ptr){
 	if (ptr == NULL) return;
-	ptr -= sizeof(cor_map_node);
 	pthread_mutex_lock(&mymutex);
 	static cor_map_node *previous = NULL;
 	if (previous != NULL) {
 		munmap(previous->key, previous->alloc_size);
 		munmap(previous->cryptoaddr, previous->alloc_size);
+		__libc_free(previous);
 		previous = NULL;
 	}
     cor_map_node *node;
@@ -242,16 +241,14 @@ void *realloc(void *ptr, size_t size){
 		free(ptr);
 		return NULL;
 	}
-	void *user_ptr = ptr - sizeof(cor_map_node);
 	cor_map_node *node;
 	void *new = NULL;
-	if ((node = cor_map_get(&mem_map, user_ptr)) != NULL){
-		size_t node_size = node->alloc_size - sizeof(cor_map_node);
+	if ((node = cor_map_get(&mem_map, ptr)) != NULL){
 		new = malloc(size);
 		if (new == NULL) {
 			printf("MALLOC RETURNED NULL %zu\n", size);
 		}
-		memcpy(new, ptr, node_size < size ? node_size : size);
+		memcpy(new, ptr, node->alloc_size < size ? node->alloc_size : size);
 		free(ptr);
 		return new;
 	}
