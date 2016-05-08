@@ -108,7 +108,7 @@ static void decryptor(int signum, siginfo_t *info, void *context){
 	goto segfault;
 decrypt:
 	//printf("Decrypting your ram\n");
-	for (size_t i = 0; i < np->alloc_size; i += 64){
+	for (size_t i = 0; i < np->alloc_size; i += 16){
 		AES128_ECB_decrypt_inplace(np->cryptoaddr + i, AES_KEY);
 	}
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
@@ -127,7 +127,8 @@ static void *encryptor(void *ptr){
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next){
 			mprotect(np->key, np->alloc_size, PROT_NONE);
-			for (size_t i = 0; i < np->alloc_size; i += 64){
+			//TODO: i have to check if the page is already encrypted !!!
+			for (size_t i = 0; i < np->alloc_size; i += 16){
 				AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
 			}
 		}
