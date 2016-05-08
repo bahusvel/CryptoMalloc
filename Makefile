@@ -1,8 +1,8 @@
 .PHONY: clean
 
 CC = gcc
-CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -pthread
-LDFLAGS = -shared -ldl
+CFLAGS = -W -fPIC -Wall -Wextra -O2 -g
+LDFLAGS = -shared -ldl -lpthread
 
 SRC = CryptoMalloc/main.c
 TESTSRC = CryptoMallocTest/main.c

@@ -20,12 +20,24 @@
 #include <errno.h>
 #include <assert.h>
 #include <signal.h>
+#include <stdint.h>
+#include "aes.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
+
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
+
+// this is done because on Linux pthreads overrides malloc, and it cannot be fetched using dlsym
+#ifdef __APPLE__
+static void *(*__libc_malloc)(size_t size);
+static void *(*__libc_free)(void *ptr);
+#else if __linux__
+extern void *__libc_malloc(size_t size);
+extern void *__libc_free(void *ptr);
+#endif
 
 typedef struct cor_map_node {
     void			*key;
@@ -71,6 +83,7 @@ static inline void cor_map_set(cor_map* map, cor_map_node *node){ // can be inli
 
 
 static char *CRYPTO_PATH = "/Users/denislavrov/Desktop/RAM/";
+static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c}; // :)
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static volatile unsigned long __crypto_allocid = 0;
@@ -82,6 +95,7 @@ static pthread_t encryptor_thread;
 
 static void decryptor(int signum, siginfo_t *info, void *context){
 	// code here must be heavily optimised, page fault code !!!
+	static buffer[4096];
 	void *address = info->si_addr;
 	if (address == NULL) goto segfault;
 	cor_map_node *np;
@@ -125,6 +139,11 @@ static void crypto_malloc_ctor(){
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
 	}
+	
+	#ifdef __APPLE__
+	__libc_malloc = dlsym(RTLD_NEXT, "malloc");
+	__libc_free = dlsym(RTLD_NEXT, "free");
+	#endif
 	
 	sprintf(PID_PATH, "%s%d.mem", CRYPTO_PATH, getpid());
 	fd = open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
