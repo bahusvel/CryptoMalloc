@@ -498,6 +498,10 @@ void AES128_ECB_decrypt_inplace(uint8_t* input, const uint8_t* key){
 	InvCipher();
 }
 
+void AES128_ExpandKey(uint8_t* key){
+	Key = key;
+	KeyExpansion();
+}
 
 #endif // #if defined(ECB) && ECB
 

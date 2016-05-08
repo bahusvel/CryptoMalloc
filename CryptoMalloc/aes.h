@@ -19,6 +19,7 @@
 #endif
 
 
+void AES128_ExpandKey(uint8_t* key);
 
 #if defined(ECB) && ECB
 

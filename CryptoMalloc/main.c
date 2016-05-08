@@ -27,6 +27,8 @@
 #define PATH_MAX 4096
 #endif
 
+#define CRYPTO_CLEAR	0x01
+#define CRYPTO_CIPHER	0x02
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -43,6 +45,7 @@ typedef struct cor_map_node {
     void			*key;
 	void			*cryptoaddr;
 	size_t			alloc_size;
+	unsigned char	flags;
     struct cor_map_node *next;
 } cor_map_node;
 
@@ -126,10 +129,12 @@ static void *encryptor(void *ptr){
 		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next){
-			mprotect(np->key, np->alloc_size, PROT_NONE);
-			//TODO: i have to check if the page is already encrypted !!!
-			for (size_t i = 0; i < np->alloc_size; i += 16){
-				AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
+			if (np->flags & CRYPTO_CLEAR){
+				mprotect(np->key, np->alloc_size, PROT_NONE);
+				for (size_t i = 0; i < np->alloc_size; i += 16){
+					AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
+				}
+				np->flags = CRYPTO_CIPHER;
 			}
 		}
 		pthread_mutex_unlock(&mymutex);
