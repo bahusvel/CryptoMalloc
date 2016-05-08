@@ -464,6 +464,17 @@ void AES128_ECB_encrypt(uint8_t* input, const uint8_t* key, uint8_t* output)
   Cipher();
 }
 
+void AES128_ECB_encrypt_inplace(uint8_t* input, const uint8_t* key){
+	state = (state_t*)input;
+	
+	Key = key;
+	KeyExpansion();
+	
+	// The next function call encrypts the PlainText with the Key using AES algorithm.
+	Cipher();
+}
+
+
 void AES128_ECB_decrypt(uint8_t* input, const uint8_t* key, uint8_t *output)
 {
   // Copy input to output, and work in-memory on output
@@ -475,6 +486,16 @@ void AES128_ECB_decrypt(uint8_t* input, const uint8_t* key, uint8_t *output)
   KeyExpansion();
 
   InvCipher();
+}
+
+void AES128_ECB_decrypt_inplace(uint8_t* input, const uint8_t* key){
+	state = (state_t*)input;
+	
+	// The KeyExpansion routine must be called before encryption.
+	Key = key;
+	KeyExpansion();
+	
+	InvCipher();
 }
 
 

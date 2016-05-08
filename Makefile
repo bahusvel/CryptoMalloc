@@ -1,16 +1,15 @@
 .PHONY: clean
 
 CC = gcc
-CFLAGS = -W -fPIC -Wall -Wextra -O2 -g
-LDFLAGS = -shared -ldl -lpthread
+CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
+LDFLAGS = -shared -ldl -pthread
 
-SRC = CryptoMalloc/main.c
+SRC = CryptoMalloc/*.c
 TESTSRC = CryptoMallocTest/main.c
 OBJ = $(SRC:.c=.o)
 
-TARGET = CryptoMalloc.so
 
-all: $(TARGET) test
+all: cryptomalloc test
 
 test:
 	$(CC) -std=c99 $(TESTSRC) -o test
@@ -18,5 +17,11 @@ test:
 clean:
 	rm -f $(OBJ) $(TARGET)
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+aes.o: CryptoMalloc/aes.c
+	gcc $(CFLAGS) -c CryptoMalloc/aes.c
+
+main.o: CryptoMalloc/main.c
+	gcc $(CFLAGS) -c CryptoMalloc/main.c
+
+cryptomalloc: main.o aes.o
+	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o

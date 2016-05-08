@@ -34,7 +34,7 @@ static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 #ifdef __APPLE__
 static void *(*__libc_malloc)(size_t size);
 static void *(*__libc_free)(void *ptr);
-#else if __linux__
+#else
 extern void *__libc_malloc(size_t size);
 extern void *__libc_free(void *ptr);
 #endif
@@ -95,7 +95,6 @@ static pthread_t encryptor_thread;
 
 static void decryptor(int signum, siginfo_t *info, void *context){
 	// code here must be heavily optimised, page fault code !!!
-	static buffer[4096];
 	void *address = info->si_addr;
 	if (address == NULL) goto segfault;
 	cor_map_node *np;
@@ -109,6 +108,9 @@ static void decryptor(int signum, siginfo_t *info, void *context){
 	goto segfault;
 decrypt:
 	//printf("Decrypting your ram\n");
+	for (size_t i = 0; i < np->alloc_size; i += 64){
+		AES128_ECB_decrypt_inplace(np->cryptoaddr + i, AES_KEY);
+	}
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
 	pthread_mutex_unlock(&mymutex);
 	return;
@@ -118,17 +120,21 @@ segfault:
 	return;
 }
 
-static void encryptor(void *ptr){
+static void *encryptor(void *ptr){
 	while (1) {
 		//printf("Encryptor is spinning\n");
 		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next){
 			mprotect(np->key, np->alloc_size, PROT_NONE);
+			for (size_t i = 0; i < np->alloc_size; i += 64){
+				AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
+			}
 		}
 		pthread_mutex_unlock(&mymutex);
 		usleep(1000000);
 	}
+	return NULL;
 }
 
 __attribute__((constructor))
