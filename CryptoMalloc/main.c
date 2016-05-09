@@ -185,12 +185,13 @@ static void crypto_malloc_ctor(){
 		exit(EXIT_FAILURE);
 	}
 
-	/* this is a bit evil and is questionable whether it should be used...
+	/*// this is a bit evil and is questionable whether it should be used...
 	char *stdout_buffer = malloc(BUFSIZ);
 	char *stdin_buffer = malloc(BUFSIZ);
 	setbuf(stdin, stdin_buffer);
 	setbuf(stdout, stdout_buffer);
 	*/
+	
 }
 
 
@@ -242,7 +243,7 @@ void free(void *ptr){
 	if (previous != NULL) {
 		if (previous->flags & CRYPTO_CLEAR){
 			// clear out the memory before releasing if it is clear
-			memset(previous->key, 0, previous->alloc_size);
+			memset(previous->cryptoaddr, 0, previous->alloc_size);
 		}
 		munmap(previous->key, previous->alloc_size);
 		munmap(previous->cryptoaddr, previous->alloc_size);
@@ -254,7 +255,7 @@ void free(void *ptr){
 		previous = node;
 	} else {
 		// It really should never go here, but its left as a precaution
-		printf("LIBC FREE\n");
+		printf("free: Forreign pointer\n");
 	}
 	pthread_mutex_unlock(&mymutex);
 }
@@ -273,13 +274,14 @@ void *realloc(void *ptr, size_t size){
 		new = malloc(size);
 		if (new == NULL) {
 			printf("MALLOC RETURNED NULL %zu\n", size);
+			return NULL;
 		}
 		memcpy(new, ptr, node->alloc_size < size ? node->alloc_size : size);
 		free(ptr);
 		return new;
 	}
 	// It really should never go here, but its left as a precaution
-	printf("LIBC REALLOC\n");
+	printf("realloc: Forreign pointer\n");
 	return NULL;
 }
 
@@ -289,6 +291,6 @@ void *calloc(size_t count, size_t size){
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
 	assert(result != NULL);
-	//memset(result, 0, fsize); //allocated file should be zerod...
+	//memset(result, 0, fsize); //allocated file should be zeroed...
 	return result;
 }
