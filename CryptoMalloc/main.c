@@ -120,6 +120,7 @@ decrypt:
 	pthread_mutex_unlock(&mymutex);
 	return;
 segfault:
+	// if stdin and stdout buffers are encrypted this might be bad...
 	printf("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
 	return;
@@ -184,6 +185,12 @@ static void crypto_malloc_ctor(){
 		exit(EXIT_FAILURE);
 	}
 
+	/* this is a bit evil and is questionable whether it should be used...
+	char *stdout_buffer = malloc(BUFSIZ);
+	char *stdin_buffer = malloc(BUFSIZ);
+	setbuf(stdin, stdin_buffer);
+	setbuf(stdout, stdout_buffer);
+	*/
 }
 
 
