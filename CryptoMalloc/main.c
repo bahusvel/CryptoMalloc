@@ -114,6 +114,7 @@ decrypt:
 	for (size_t i = 0; i < np->alloc_size; i += 16){
 		AES128_ECB_decrypt_inplace(np->cryptoaddr + i, AES_KEY);
 	}
+	//printf("Decrypted!\n");
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
 	np->flags = CRYPTO_CLEAR;
 	pthread_mutex_unlock(&mymutex);
@@ -126,7 +127,6 @@ segfault:
 
 static void *encryptor(void *ptr){
 	while (1) {
-		//printf("Encryptor is spinning\n");
 		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next){
@@ -135,6 +135,7 @@ static void *encryptor(void *ptr){
 				for (size_t i = 0; i < np->alloc_size; i += 16){
 					AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
 				}
+				//printf("Encrypted!\n");
 				np->flags = CRYPTO_CIPHER;
 			}
 		}
@@ -215,6 +216,7 @@ void *malloc(size_t size){
 		head_node->key = user_mem;
 		head_node->cryptoaddr = crypto_mem;
 		head_node->alloc_size = size;
+		head_node->flags = CRYPTO_CLEAR;
         cor_map_set(&mem_map, head_node);
 		pthread_mutex_unlock(&mymutex);
         return user_mem;
@@ -231,6 +233,10 @@ void free(void *ptr){
 	pthread_mutex_lock(&mymutex);
 	static cor_map_node *previous = NULL;
 	if (previous != NULL) {
+		if (previous->flags & CRYPTO_CLEAR){
+			// clear out the memory before releasing if it is clear
+			memset(previous->key, 0, previous->alloc_size);
+		}
 		munmap(previous->key, previous->alloc_size);
 		munmap(previous->cryptoaddr, previous->alloc_size);
 		__libc_free(previous);

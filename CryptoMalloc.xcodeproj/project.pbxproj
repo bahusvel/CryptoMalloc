@@ -48,6 +48,7 @@
 		A89C745B1CD856DA0075007B /* libCryptoMalloc.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libCryptoMalloc.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		A89C74671CD95B8A0075007B /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		A89C746C1CDAD4B80075007B /* cmalloc.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = cmalloc.sh; sourceTree = "<group>"; };
+		A89C746D1CE052B70075007B /* reversestring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = reversestring.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				A89C74521CD8561B0075007B /* main.c */,
+				A89C746D1CE052B70075007B /* reversestring.c */,
 			);
 			path = CryptoMallocTest;
 			sourceTree = "<group>";
