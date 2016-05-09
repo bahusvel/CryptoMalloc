@@ -115,6 +115,7 @@ decrypt:
 		AES128_ECB_decrypt_inplace(np->cryptoaddr + i, AES_KEY);
 	}
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
+	np->flags = CRYPTO_CLEAR;
 	pthread_mutex_unlock(&mymutex);
 	return;
 segfault:
