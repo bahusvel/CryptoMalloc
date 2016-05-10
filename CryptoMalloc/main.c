@@ -27,8 +27,8 @@
 #define PATH_MAX 4096
 #endif
 
-#define CRYPTO_CLEAR	0x01
-#define CRYPTO_CIPHER	0x02
+#define CRYPTO_NOCIPHER	0x01
+#define CRYPTO_CLEAR	0x02
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -89,7 +89,6 @@ static char *CRYPTO_PATH = "/Users/denislavrov/Desktop/RAM/";
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c}; // :)
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
-static volatile unsigned long __crypto_allocid = 0;
 static cor_map mem_map = {NULL};
 static const char fend = 0;
 static int fd = -1;
@@ -97,7 +96,6 @@ static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
 static void decryptor(int signum, siginfo_t *info, void *context){
-	// code here must be heavily optimised, page fault code !!!
 	void *address = info->si_addr;
 	if (address == NULL) goto segfault;
 	cor_map_node *np;
@@ -112,16 +110,16 @@ static void decryptor(int signum, siginfo_t *info, void *context){
 decrypt:
 	//printf("Decrypting your ram\n");
 	for (size_t i = 0; i < np->alloc_size; i += 16){
-		AES128_ECB_decrypt_inplace(np->cryptoaddr + i, AES_KEY);
+		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
 	}
 	//printf("Decrypted!\n");
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
-	np->flags = CRYPTO_CLEAR;
+	np->flags |= CRYPTO_CLEAR;
 	pthread_mutex_unlock(&mymutex);
 	return;
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
-	printf("Real Seg Fault Happened :(\n");
+	//printf("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
 	return;
 }
@@ -134,14 +132,14 @@ static void *encryptor(void *ptr){
 			if (np->flags & CRYPTO_CLEAR){
 				mprotect(np->key, np->alloc_size, PROT_NONE);
 				for (size_t i = 0; i < np->alloc_size; i += 16){
-					AES128_ECB_encrypt_inplace(np->cryptoaddr + i, AES_KEY);
+					AES128_ECB_encrypt_inplace(np->cryptoaddr + i);
 				}
 				//printf("Encrypted!\n");
-				np->flags = CRYPTO_CIPHER;
+				np->flags &= ~CRYPTO_CLEAR;
 			}
 		}
 		pthread_mutex_unlock(&mymutex);
-		usleep(1000000);
+		usleep(1000000); //paranoia setting, right here
 	}
 	return NULL;
 }
@@ -149,6 +147,7 @@ static void *encryptor(void *ptr){
 __attribute__((constructor))
 static void crypto_malloc_ctor(){
 	PAGE_SIZE = getpagesize();
+	AES128_SetKey(AES_KEY);
 	// change this to temp
 	char *envPath = getenv("CRYPTO_PATH");
 	if (envPath != NULL) {
@@ -172,7 +171,7 @@ static void crypto_malloc_ctor(){
 	sa.sa_sigaction = decryptor;
 	sigemptyset(&sa.sa_mask);
 	sigaddset(&sa.sa_mask, SIGSEGV);
-	sa.sa_flags = SA_SIGINFO;
+	sa.sa_flags = SA_SIGINFO | SA_RESTART;
 	
 	if (sigaction(SIGSEGV, &sa, &old_handler) < 0){
 		perror("Signal Handler Installation Failed:");
@@ -245,15 +244,13 @@ void free(void *ptr){
 			// clear out the memory before releasing if it is clear
 			memset(previous->cryptoaddr, 0, previous->alloc_size);
 		}
+		//printf("Deleting %zu\n", previous->alloc_size);
 		munmap(previous->key, previous->alloc_size);
 		munmap(previous->cryptoaddr, previous->alloc_size);
 		__libc_free(previous);
 		previous = NULL;
 	}
-    cor_map_node *node;
-	if ((node = cor_map_delete(&mem_map, ptr)) != NULL){
-		previous = node;
-	} else {
+	if ((previous = cor_map_delete(&mem_map, ptr)) == NULL){
 		// It really should never go here, but its left as a precaution
 		printf("free: Forreign pointer\n");
 	}

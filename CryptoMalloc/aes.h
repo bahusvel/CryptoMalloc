@@ -19,14 +19,14 @@
 #endif
 
 
-void AES128_ExpandKey(uint8_t* key);
+void AES128_SetKey(uint8_t* key);
 
 #if defined(ECB) && ECB
 
 void AES128_ECB_encrypt(uint8_t* input, const uint8_t* key, uint8_t *output);
 void AES128_ECB_decrypt(uint8_t* input, const uint8_t* key, uint8_t *output);
-void AES128_ECB_encrypt_inplace(uint8_t* input, const uint8_t* key);
-void AES128_ECB_decrypt_inplace(uint8_t* input, const uint8_t* key);
+void AES128_ECB_encrypt_inplace(uint8_t* input);
+void AES128_ECB_decrypt_inplace(uint8_t* input);
 
 #endif // #if defined(ECB) && ECB
 
