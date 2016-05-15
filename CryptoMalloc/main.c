@@ -153,31 +153,31 @@ static void crypto_malloc_ctor(){
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
 	}
-	
+
 	#ifdef __APPLE__
 	__libc_malloc = dlsym(RTLD_NEXT, "malloc");
 	__libc_free = dlsym(RTLD_NEXT, "free");
 	#endif
-	
+
 	sprintf(PID_PATH, "%s%d.mem", CRYPTO_PATH, getpid());
 	fd = open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (fd < 0) {
 		perror("Open");
 		abort();
 	}
-	
+
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
 	sigemptyset(&sa.sa_mask);
 	sigaddset(&sa.sa_mask, SIGSEGV);
 	sa.sa_flags = SA_SIGINFO | SA_RESTART;
-	
+
 	if (sigaction(SIGSEGV, &sa, &old_handler) < 0){
 		perror("Signal Handler Installation Failed:");
 		abort();
 	}
-	
+
 	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
 	if(iret){
 		printf("Error - pthread_create() return code: %d\n",iret);
@@ -190,7 +190,7 @@ static void crypto_malloc_ctor(){
 	setbuf(stdin, stdin_buffer);
 	setbuf(stdout, stdout_buffer);
 	*/
-	
+
 }
 
 
@@ -214,10 +214,10 @@ void *malloc(size_t size){
 	off_t foffset = new_offset - (size - 1);
     write(fd, &fend, 1);
     fsync(fd);
-	
+
     void *user_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
 	void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fd, foffset);
-	
+
     if (user_mem != MAP_FAILED) {
 		cor_map_node *head_node = __libc_malloc(sizeof(cor_map_node));
 		head_node->key = user_mem;
@@ -242,7 +242,7 @@ void free(void *ptr){
 	if (previous != NULL) {
 		if (previous->flags & CRYPTO_CLEAR){
 			// clear out the memory before releasing if it is clear
-			memset(previous->cryptoaddr, 0, previous->alloc_size);
+			memset(previous->key, 0, previous->alloc_size);
 		}
 		//printf("Deleting %zu\n", previous->alloc_size);
 		munmap(previous->key, previous->alloc_size);
@@ -266,16 +266,16 @@ void *realloc(void *ptr, size_t size){
 		return NULL;
 	}
 	cor_map_node *node;
-	void *new = NULL;
+	void *new_addr = NULL;
 	if ((node = cor_map_get(&mem_map, ptr)) != NULL){
-		new = malloc(size);
-		if (new == NULL) {
+		new_addr = malloc(size);
+		if (new_addr == NULL) {
 			printf("MALLOC RETURNED NULL %zu\n", size);
 			return NULL;
 		}
-		memcpy(new, ptr, node->alloc_size < size ? node->alloc_size : size);
+		memcpy(new_addr, ptr, node->alloc_size < size ? node->alloc_size : size);
 		free(ptr);
-		return new;
+		return new_addr;
 	}
 	// It really should never go here, but its left as a precaution
 	printf("realloc: Forreign pointer\n");

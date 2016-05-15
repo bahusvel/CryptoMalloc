@@ -25,3 +25,7 @@ main.o: CryptoMalloc/main.c
 
 cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o
+
+run:
+	rm -f /mnt/tmpfs/*
+	./cmalloc.sh python3
