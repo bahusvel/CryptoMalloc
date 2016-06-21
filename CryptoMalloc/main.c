@@ -149,7 +149,9 @@ static void *encryptor(void *ptr) {
 			}
 		}
 		pthread_mutex_unlock(&mymutex);
-		usleep(1000000); // paranoia setting, right here
+		struct timespec sleep_time = {1, 0}; // seconds, nanoseconds
+		while (nanosleep(&sleep_time, &sleep_time))
+			continue;
 	}
 	return NULL;
 }
