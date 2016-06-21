@@ -7,7 +7,7 @@ CryptoMalloc as the name suggest overloads the libc standard malloc function and
 # Why?
 * For fun!
 * To avoid virtual machine introspection, if you dont trust your hypervisor/host (Public Cloud, Public Grid)
-* Use FS as RAM? Because CryptoMalloc maps memory to files on your file system you could utilize your secondary storage for situations when you don't need fast memory but need a lot of it. 
+* Use FS as RAM? Because CryptoMalloc maps memory to files on your file system you could utilize your secondary storage for situations when you don't need fast memory but need a lot of it.
 * Untrusted hardware? You never know...
 
 # How fast is it?
@@ -30,3 +30,9 @@ DYLD_FORCE_FLAT_NAMESPACE=1 DYLD_INSERT_LIBRARIES=libCryptoMalloc.dylib [applica
 LD_PRELOAD=cryptomalloc.so [application]
 ```
 CryptoMalloc also provides a shell script that will do this for you!
+
+# Issues:
+* It doesnt actually free anything... (it can be "easily" fixed, but i'm lazy)
+* Kernel doesnt trigger sigsegv on memory passed to it via syscall, so it will see the encrypted memory (fix is not very easy, requires to intercept syscalls, alternatively use crypto aware api)
+* It used to deadlock sometimes, but I cant reproduce it anymore...
+* The memory management datastructure is not efficient (use rb-tree from linux kernel)
