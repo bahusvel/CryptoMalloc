@@ -23,12 +23,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define CRYPTO_NOCIPHER 0x01
+#define CRYPTO_CLEAR 0x02
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
-#define CRYPTO_NOCIPHER 0x01
-#define CRYPTO_CLEAR 0x02
+// comment this out to not encrypt STDIO
+#define ENCRYPT_STDIO 1
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -112,7 +114,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	goto segfault;
 decrypt:
 	// printf("Decrypting your ram\n");
-	for (size_t i = 0; i < np->alloc_sizForIndentatione; i += 16) {
+	for (size_t i = 0; i < np->alloc_size; i += 16) {
 		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
 	}
 	// printf("Decrypted!\n");
@@ -122,7 +124,7 @@ decrypt:
 	return;
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
-	// printf("Real Seg Fault Happened :(\n");
+	printf("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
 	return;
 }
@@ -131,7 +133,8 @@ static void *encryptor(void *ptr) {
 	sigset_t set;
 	sigemptyset(&set);
 	sigaddset(&set, SIGSEGV);
-	// this will block sigsegv, so ensure code here is correct
+	// this will block sigsegv on this thread, so ensure code from here on is
+	// correct
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
 
 	while (1) {
@@ -156,7 +159,7 @@ static void *encryptor(void *ptr) {
 __attribute__((constructor)) static void crypto_malloc_ctor() {
 	PAGE_SIZE = getpagesize();
 	AES128_SetKey(AES_KEY);
-	// change this to temp
+
 	char *envPath = getenv("CRYPTO_PATH");
 	if (envPath != NULL) {
 		CRYPTO_PATH = envPath;
@@ -192,11 +195,13 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 		exit(EXIT_FAILURE);
 	}
 
+#ifdef ENCRYPT_STDIO
 	// this is a bit evil and is questionable whether it should be used...
 	char *stdout_buffer = malloc(BUFSIZ);
 	char *stdin_buffer = malloc(BUFSIZ);
 	setbuf(stdin, stdin_buffer);
 	setbuf(stdout, stdout_buffer);
+#endif
 }
 
 __attribute__((destructor)) static void crypto_malloc_dtor() {
@@ -251,7 +256,7 @@ void free(void *ptr) {
 			// clear out the memory before releasing if it is clear
 			memset(previous->key, 0, previous->alloc_size);
 		}
-		// printf("Deleting %zu\n", previous->alloc_size);
+
 		munmap(previous->key, previous->alloc_size);
 		munmap(previous->cryptoaddr, previous->alloc_size);
 		__libc_free(previous);
@@ -297,7 +302,11 @@ void *calloc(size_t count, size_t size) {
 		return NULL;
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
+	pthread_mutex_lock(&mymutex);
 	assert(result != NULL);
-	// memset(result, 0, fsize); //allocated file should be zeroed...
+
+	memset(result, 0, fsize);
+	pthread_mutex_unlock(&mymutex);
+
 	return result;
 }
