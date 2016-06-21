@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
-LDFLAGS = -shared -ldl -pthread
+LDFLAGS = -shared -ldl
 
 SRC = CryptoMalloc/*.c
 TESTSRC = CryptoMallocTest/main.c
@@ -24,8 +24,7 @@ main.o: CryptoMalloc/main.c
 	gcc $(CFLAGS) -c CryptoMalloc/main.c
 
 cryptomalloc: main.o aes.o
-	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o
+	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
 run:
-	rm -f /mnt/tmpfs/*
 	./cmalloc.sh python3

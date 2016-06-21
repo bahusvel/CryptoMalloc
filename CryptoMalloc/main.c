@@ -30,7 +30,7 @@
 #endif
 
 // comment this out to not encrypt STDIO
-#define ENCRYPT_STDIO 1
+//#define ENCRYPT_STDIO 1
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -81,21 +81,19 @@ static cor_map_node *cor_map_get(cor_map *map, void *key) {
 	return NULL;
 }
 
-static inline void cor_map_set(cor_map *map,
-							   cor_map_node *node) { // can be inlined
+static inline void cor_map_set(cor_map *map, cor_map_node *node) {
 	node->next = map->first;
 	map->first = node;
 }
 
-static char *CRYPTO_PATH = "/Users/denislavrov/Desktop/RAM/";
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static cor_map mem_map = {NULL};
-static const char fend = 0;
 static int fd = -1;
+static off64_t crypto_mem_break = 0;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
@@ -160,18 +158,13 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 	PAGE_SIZE = getpagesize();
 	AES128_SetKey(AES_KEY);
 
-	char *envPath = getenv("CRYPTO_PATH");
-	if (envPath != NULL) {
-		CRYPTO_PATH = envPath;
-	}
-
 #ifdef __APPLE__
 	__libc_malloc = dlsym(RTLD_NEXT, "malloc");
 	__libc_free = dlsym(RTLD_NEXT, "free");
 #endif
 
-	sprintf(PID_PATH, "%s%d.mem", CRYPTO_PATH, getpid());
-	fd = open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+	sprintf(PID_PATH, "/%d.mem", getpid());
+	fd = shm_open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (fd < 0) {
 		perror("Open");
 		abort();
@@ -206,7 +199,7 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 
 __attribute__((destructor)) static void crypto_malloc_dtor() {
 	close(fd);
-	unlink(PID_PATH);
+	shm_unlink(PID_PATH);
 }
 
 void *malloc(size_t size) {
@@ -215,14 +208,14 @@ void *malloc(size_t size) {
 	// TODO: may need to check if the right segfault handler is set
 	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
 	pthread_mutex_lock(&mymutex);
-	off_t new_offset = lseek(fd, size - 1, SEEK_END);
-	if (new_offset < 0) {
-		perror("Could not seek");
+
+	off_t foffset = crypto_mem_break;
+	crypto_mem_break += size;
+
+	if (ftruncate64(fd, crypto_mem_break) < 0) {
+		perror("ftruncate");
 		return NULL;
 	}
-	off_t foffset = new_offset - (size - 1);
-	write(fd, &fend, 1);
-	fsync(fd);
 
 	void *user_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
 						  MAP_SHARED, fd, foffset);
@@ -302,6 +295,7 @@ void *calloc(size_t count, size_t size) {
 		return NULL;
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
+
 	pthread_mutex_lock(&mymutex);
 	assert(result != NULL);
 
