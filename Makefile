@@ -9,13 +9,13 @@ TESTSRC = CryptoMallocTest/main.c
 OBJ = $(SRC:.c=.o)
 
 
-all: cryptomalloc test
+all: clean cryptomalloc test
 
 test:
 	$(CC) -std=c99 $(TESTSRC) -o test
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f *.o *.so
 
 aes.o: CryptoMalloc/aes.c
 	gcc $(CFLAGS) -c CryptoMalloc/aes.c
