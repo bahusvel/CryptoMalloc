@@ -112,7 +112,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	goto segfault;
 decrypt:
 	// printf("Decrypting your ram\n");
-	for (size_t i = 0; i < np->alloc_size; i += 16) {
+	for (size_t i = 0; i < np->alloc_sizForIndentatione; i += 16) {
 		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
 	}
 	// printf("Decrypted!\n");
