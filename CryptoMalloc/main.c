@@ -56,7 +56,7 @@ static cor_map_node *cor_map_delete(cor_map *map, void *key) {
 	cor_map_node *pnp;
 	cor_map_node *np;
 	for (np = map->first, pnp = map->first; np != NULL;
-	     pnp = np, np = np->next) {
+		 pnp = np, np = np->next) {
 		if (np->key == key) {
 			if (np == map->first) {
 				map->first = np->next;
@@ -80,15 +80,15 @@ static cor_map_node *cor_map_get(cor_map *map, void *key) {
 }
 
 static inline void cor_map_set(cor_map *map,
-                               cor_map_node *node) { // can be inlined
+							   cor_map_node *node) { // can be inlined
 	node->next = map->first;
 	map->first = node;
 }
 
 static char *CRYPTO_PATH = "/Users/denislavrov/Desktop/RAM/";
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
-                            0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
-                            0x09, 0xcf, 0x4f, 0x3c}; // :)
+							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+							0x09, 0xcf, 0x4f, 0x3c}; // :)
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static cor_map mem_map = {NULL};
@@ -104,8 +104,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	cor_map_node *np;
 	pthread_mutex_lock(&mymutex);
 	for (np = mem_map.first; np != NULL; np = np->next) {
-		if (np->key <= address &&
-		    address <= (np->key + np->alloc_size)) {
+		if (np->key <= address && address <= (np->key + np->alloc_size)) {
 			goto decrypt;
 		}
 	}
@@ -129,16 +128,20 @@ segfault:
 }
 
 static void *encryptor(void *ptr) {
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGSEGV);
+	// this will block sigsegv, so ensure code here is correct
+	pthread_sigmask(SIG_BLOCK, &set, NULL);
+
 	while (1) {
 		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
 		for (np = mem_map.first; np != NULL; np = np->next) {
 			if (np->flags & CRYPTO_CLEAR) {
 				mprotect(np->key, np->alloc_size, PROT_NONE);
-				for (size_t i = 0; i < np->alloc_size;
-				     i += 16) {
-					AES128_ECB_encrypt_inplace(
-					    np->cryptoaddr + i);
+				for (size_t i = 0; i < np->alloc_size; i += 16) {
+					AES128_ECB_encrypt_inplace(np->cryptoaddr + i);
 				}
 				// printf("Encrypted!\n");
 				np->flags &= ~CRYPTO_CLEAR;
@@ -217,9 +220,9 @@ void *malloc(size_t size) {
 	fsync(fd);
 
 	void *user_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-	                      MAP_SHARED, fd, foffset);
+						  MAP_SHARED, fd, foffset);
 	void *crypto_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-	                        MAP_SHARED, fd, foffset);
+							MAP_SHARED, fd, foffset);
 
 	if (user_mem != MAP_FAILED) {
 		cor_map_node *head_node = __libc_malloc(sizeof(cor_map_node));
@@ -279,7 +282,7 @@ void *realloc(void *ptr, size_t size) {
 			return NULL;
 		}
 		memcpy(new_addr, ptr,
-		       node->alloc_size < size ? node->alloc_size : size);
+			   node->alloc_size < size ? node->alloc_size : size);
 		free(ptr);
 		return new_addr;
 	}
