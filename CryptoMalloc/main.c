@@ -9,6 +9,8 @@
 #define _GNU_SOURCE
 
 #include "aes.h"
+#include "list.h"
+
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -29,13 +31,6 @@
 #define PATH_MAX 4096
 #endif
 
-// comment this out to not encrypt STDIO
-//#define ENCRYPT_STDIO 1
-
-static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
-
-// this is done because on Linux pthreads overrides malloc, and it cannot be
-// fetched using dlsym
 #ifdef __APPLE__
 static void *(*__libc_malloc)(size_t size);
 static void *(*__libc_free)(void *ptr);
@@ -44,58 +39,26 @@ extern void *__libc_malloc(size_t size);
 extern void *__libc_free(void *ptr);
 #endif
 
-typedef struct cor_map_node {
-	void *key;
-	void *cryptoaddr;
-	size_t alloc_size;
-	unsigned char flags;
-	struct cor_map_node *next;
-} cor_map_node;
-
-typedef struct cor_map { cor_map_node *first; } cor_map;
-
-static cor_map_node *cor_map_delete(cor_map *map, void *key) {
-	cor_map_node *pnp;
-	cor_map_node *np;
-	for (np = map->first, pnp = map->first; np != NULL;
-		 pnp = np, np = np->next) {
-		if (np->key == key) {
-			if (np == map->first) {
-				map->first = np->next;
-			} else {
-				pnp->next = np->next;
-			}
-			return np;
-		}
-	}
-	return NULL;
-}
-
-static cor_map_node *cor_map_get(cor_map *map, void *key) {
-	cor_map_node *np;
-	for (np = map->first; np != NULL; np = np->next) {
-		if (np->key == key) {
-			return np;
-		}
-	}
-	return NULL;
-}
-
-static inline void cor_map_set(cor_map *map, cor_map_node *node) {
-	node->next = map->first;
-	map->first = node;
-}
-
-static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
-							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
-							0x09, 0xcf, 0x4f, 0x3c}; // :)
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;
 static cor_map mem_map = {NULL};
+static cor_map free_map = {NULL};
 static int fd = -1;
 static off64_t crypto_mem_break = 0;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
+
+// comment this out to not encrypt STDIO
+//#define ENCRYPT_STDIO 1
+
+static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
+
+// this is done because on Linux pthreads overrides malloc, and it cannot be
+// fetched using dlsym
+
+static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
@@ -209,14 +172,24 @@ void *malloc(size_t size) {
 		return NULL;
 	// TODO: may need to check if the right segfault handler is set
 	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
+	cor_map_node *fit_node = NULL;
+
 	pthread_mutex_lock(&mymutex);
 
+	// try to reuse, freed memory
+	if (fit_node = cor_map_find_fit(&free_map, size)) {
+		cor_map_delete(&free_map, fit_node->key);
+		fit_node->flags = CRYPTO_CLEAR;
+		cor_map_set(&mem_map, fit_node);
+		goto success;
+	}
+	// otherwise go ahead and allocate some more
 	off_t foffset = crypto_mem_break;
 	crypto_mem_break += size;
 
 	if (ftruncate64(fd, crypto_mem_break) < 0) {
 		perror("ftruncate");
-		return NULL;
+		goto failure;
 	}
 
 	void *user_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -225,20 +198,25 @@ void *malloc(size_t size) {
 							MAP_SHARED, fd, foffset);
 
 	if (user_mem != MAP_FAILED) {
-		cor_map_node *head_node = __libc_malloc(sizeof(cor_map_node));
-		head_node->key = user_mem;
-		head_node->cryptoaddr = crypto_mem;
-		head_node->alloc_size = size;
-		head_node->flags = CRYPTO_CLEAR;
-		cor_map_set(&mem_map, head_node);
-		pthread_mutex_unlock(&mymutex);
-		return user_mem;
+		fit_node = __libc_malloc(sizeof(cor_map_node));
+		fit_node->key = user_mem;
+		fit_node->cryptoaddr = crypto_mem;
+		fit_node->alloc_size = size;
+		fit_node->flags = CRYPTO_CLEAR;
+		cor_map_set(&mem_map, fit_node);
+		goto success;
 	} else {
 		perror("mmap");
 		errno = ENOMEM;
-		pthread_mutex_unlock(&mymutex);
-		return NULL;
+		goto failure;
 	}
+
+failure:
+	pthread_mutex_unlock(&mymutex);
+	return NULL;
+success:
+	pthread_mutex_unlock(&mymutex);
+	return fit_node->key;
 }
 
 void free(void *ptr) {
@@ -248,15 +226,14 @@ void free(void *ptr) {
 	static cor_map_node *previous = NULL;
 	if (previous != NULL) {
 		if (previous->flags & CRYPTO_CLEAR) {
-			// clear out the memory before releasing if it is clear
+			// zero out the memory before releasing if it is clear
 			memset(previous->key, 0, previous->alloc_size);
 		}
-
-		munmap(previous->key, previous->alloc_size);
-		munmap(previous->cryptoaddr, previous->alloc_size);
-		__libc_free(previous);
+		previous->next = NULL;
+		cor_map_set(&free_map, previous);
 		previous = NULL;
 	}
+
 	if ((previous = cor_map_delete(&mem_map, ptr)) == NULL) {
 		// It really should never go here, but its left as a precaution
 		printf("free: Forreign pointer\n");
