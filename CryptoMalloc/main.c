@@ -243,7 +243,6 @@ void free(void *ptr) {
 
 // TODO: Use a more sophisticated realloc, for better performance
 void *realloc(void *ptr, size_t size) {
-	// printf("IT CALLED REALLOC\n");
 	if (ptr == NULL)
 		return malloc(size);
 	if (size == 0) {
@@ -269,7 +268,6 @@ void *realloc(void *ptr, size_t size) {
 }
 
 void *calloc(size_t count, size_t size) {
-	// printf("Calloc was called\n");
 	if (count == 0 || size == 0)
 		return NULL;
 	size_t fsize = count * size;

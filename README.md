@@ -32,7 +32,7 @@ LD_PRELOAD=cryptomalloc.so [application]
 CryptoMalloc also provides a shell script that will do this for you!
 
 # Issues:
-* It doesnt actually free anything... (it can be "easily" fixed, but i'm lazy)
 * Kernel doesnt trigger sigsegv on memory passed to it via syscall, so it will see the encrypted memory (fix is not very easy, requires to intercept syscalls, alternatively use crypto aware api)
 * It used to deadlock sometimes, but I cant reproduce it anymore...
 * The memory management datastructure is not efficient (use rb-tree from linux kernel)
+* allocator improvements, can use other malloc() implementation
