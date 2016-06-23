@@ -15,7 +15,7 @@ test:
 	$(CC) -std=c99 $(TESTSRC) -o test
 
 clean:
-	rm -f *.o *.so
+	rm -f *.o *.so monitor test
 
 aes.o: CryptoMalloc/aes.c
 	gcc $(CFLAGS) -c CryptoMalloc/aes.c
@@ -25,6 +25,12 @@ main.o: CryptoMalloc/main.c
 
 cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
+
+monitor:
+	gcc CryptoMalloc/monitor.c -o monitor
+
+run_monitor: clean monitor
+	./monitor
 
 run:
 	./cmalloc.sh python3
