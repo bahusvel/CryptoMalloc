@@ -15,7 +15,7 @@ test:
 	$(CC) -std=c99 $(TESTSRC) -o test
 
 clean:
-	rm -f *.o *.so
+	rm -f *.o *.so segments
 
 aes.o: CryptoMalloc/aes.c
 	gcc $(CFLAGS) -c CryptoMalloc/aes.c
@@ -23,8 +23,14 @@ aes.o: CryptoMalloc/aes.c
 main.o: CryptoMalloc/main.c
 	gcc $(CFLAGS) -c CryptoMalloc/main.c
 
+segments:
+	gcc -std=c99 CryptoMallocTest/segments.c -o segments
+
 cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
+
+segments_run: clean segments
+	./segments
 
 run:
 	./cmalloc.sh python3
