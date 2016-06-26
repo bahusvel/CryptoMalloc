@@ -23,14 +23,20 @@ aes.o: CryptoMalloc/aes.c
 main.o: CryptoMalloc/main.c
 	gcc $(CFLAGS) -c CryptoMalloc/main.c
 
-segments:
-	gcc -std=c99 CryptoMallocTest/segments.c -o segments
+segments.o:
+	gcc -c -Wall -Werror -fpic -std=c99 CryptoMalloc/segments.c
+
+libsegments: segments.o
+	gcc -shared -o libSegments.so segments.o
+
+segments: libsegments
+	gcc -std=c99 -ICryptoMalloc/ -L. CryptoMallocTest/segments.c -o segments -lSegments
 
 cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
 segments_run: clean segments
-	./segments
+	LD_LIBRARY_PATH=./ ./segments
 
 run:
 	./cmalloc.sh python3
