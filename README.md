@@ -7,14 +7,15 @@ CryptoMalloc as the name suggest overloads the libc standard malloc function and
 # Why?
 * For fun!
 * To avoid virtual machine introspection, if you dont trust your hypervisor/host (Public Cloud, Public Grid)
-* Use FS as RAM? Because CryptoMalloc maps memory to files on your file system you could utilize your secondary storage for situations when you don't need fast memory but need a lot of it.
 * Untrusted hardware? You never know...
+* Use is as an anti-debugging mechanism?
+* Protect application memmory from modification (it can still be modified, but modifications are not as easy todo)
 
 # How fast is it?
 Not too fast, but if your are paranoid about security, its fast enough! From the tests so far:
 * Decrypted memory access is just as fast as normal RAM
 * Decryption takes about 200-400 microseconds, depending on hardware.
-* Malloc - not tested...
+* Malloc ~ 10 us (which is pretty fast actually)
 * Others - not tested...
 
 # Note on encryption:
@@ -24,15 +25,17 @@ Stack will not be encrypted! As stack allocations are not done through malloc, o
 If you have the source code for the software whose ram you want encrypted, simply link the CryptoMalloc like any other standard shared library and compile your code, and it should work as is. If you dont however you can use the following tricks to load it into your binary runtime:
 
 ```bash
-# Mac OS X, support for OSX is a bit weird, but will be better soon :)
+# Mac OS X, It is not developed for OSX, but in theory it should work on any POSIX (may need minor modifications)
 DYLD_FORCE_FLAT_NAMESPACE=1 DYLD_INSERT_LIBRARIES=libCryptoMalloc.dylib [application]
-# Linux
+# Linux, Totally works :)
 LD_PRELOAD=cryptomalloc.so [application]
+# OR
+./cmalloc.sh [application]
 ```
-CryptoMalloc also provides a shell script that will do this for you!
+CryptoMalloc also provides a shell script that will do this for you! (cmalloc.sh)
 
 # Issues:
 * Kernel doesnt trigger sigsegv on memory passed to it via syscall, so it will see the encrypted memory (fix is not very easy, requires to intercept syscalls, alternatively use crypto aware api)
 * It used to deadlock sometimes, but I cant reproduce it anymore...
 * The memory management datastructure is not efficient (use rb-tree from linux kernel)
-* allocator improvements, can use other malloc() implementation
+* allocator needs improvements as it currently badly suffers from fragmentation,I can use other malloc() implementation (however i'm lazy)
