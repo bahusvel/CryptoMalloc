@@ -2,7 +2,9 @@
 #include <stdlib.h>
 
 extern int etext, edata, end;
+
 extern char *libstring;
+// extern void (*print_string)(void *from, int size);
 
 char *password = "Denis is awesome";
 
@@ -23,5 +25,6 @@ int main() {
 	printf("Location of library global variable %10p\n", libstring);
 	printf("Printing from etext:\n");
 	print_string(&etext, 100);
+
 	exit(EXIT_SUCCESS);
 }

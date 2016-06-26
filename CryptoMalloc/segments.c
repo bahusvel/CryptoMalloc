@@ -8,6 +8,7 @@ char *libstring = "Denis sucks";
 extern int etext, edata, end;
 
 void print_string(void *from, int size) {
+	printf("Location of library function %10p\n", print_string);
 	for (int i = 0; i < size; i++) {
 		printf("%c", *(char *)(from + i));
 	}

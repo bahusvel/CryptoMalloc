@@ -29,13 +29,13 @@ segments.o:
 libsegments: segments.o
 	gcc -shared -o libSegments.so segments.o
 
-segments: libsegments
-	gcc -std=c99 -ICryptoMalloc/ -L. CryptoMallocTest/segments.c -o segments -lSegments
+segment_test: libsegments
+	gcc -std=c99 -ICryptoMalloc/ -L. CryptoMallocTest/segment_test.c -o segments -lSegments
 
 cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
-segments_run: clean segments
+segments_run: clean segment_test
 	LD_LIBRARY_PATH=./ ./segments
 
 run:
