@@ -1,7 +1,9 @@
 /* This code checks if memory page is readable, writable using syscall*/
 #ifndef _VMSTAT_
 #define _VMSTAT_
+#include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -11,10 +13,16 @@ int check_read(void *address) {
 	int stat = PROT_NONE;
 	if (fd == -2)
 		fd = open("/dev/null", O_RDWR);
-	if (fd < 0)
+	if (fd < 0) {
+		perror("Could not open /dev/null");
 		return -1;
-	if (write(fd, address, 1))
+	}
+	if (write(fd, address, 1) == -1) {
+		if (errno != EFAULT) {
+			perror("errno");
+		}
 		return stat;
+	}
 	return PROT_READ;
 }
 

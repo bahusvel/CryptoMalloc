@@ -1,4 +1,7 @@
+#define _GNU_SOURCE
+
 #include "aes.h"
+#include "procstat.h"
 #include "vmstat.h"
 #include <errno.h>
 #include <pthread.h>
@@ -8,9 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-extern int etext, edata, end;
+static void *stext = 0;
+static void *etext = 0;
+extern int edata, end;
 
 #define TEXT_START_X64 0x400000
 #define TEXT_START_X86 0x08048000
@@ -23,9 +29,9 @@ extern int etext, edata, end;
 #endif
 
 #define IN_TEXT(address)                                                       \
-	(address >= (void *)TEXT_START) && (address < (void *)&etext) ? 1 : 0
+	(address >= (void *)TEXT_START) && (address < etext) ? 1 : 0
 #define IN_DATA(address)                                                       \
-	(address >= (void *)&etext) && (address < (void *)&edata) ? 1 : 0
+	(address >= etext) && (address < (void *)&edata) ? 1 : 0
 #define IN_BSS(address)                                                        \
 	(address >= (void *)&edata) && (address < (void *)&end) ? 1 : 0
 
@@ -60,7 +66,7 @@ static pthread_t encryptor_thread;
 // touch the same memory, all memory encryption and decryption operations must
 // lock this
 static pthread_mutex_t page_lock = PTHREAD_MUTEX_INITIALIZER;
-int PAGE_SIZE = 0;
+unsigned int PAGE_SIZE = 0;
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
@@ -69,18 +75,18 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	if (address == NULL)
 		goto segfault;
-	vm_segment *this_segment = address_segment(address);
-	if (this_segment == NULL)
+	if (!IN_TEXT(address))
 		goto segfault;
 	// align to page boundary
+	printf("Address %10p\n", address);
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
-
+	printf("Aligned %10p\n", address);
 	pthread_mutex_lock(&page_lock);
 	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 	for (size_t i = 0; i < PAGE_SIZE; i += 16) {
 		AES128_ECB_decrypt_inplace(address + i);
 	}
-	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
+	mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
 	pthread_mutex_unlock(&page_lock);
 	printf("Decrypted!\n");
 	return;
@@ -91,6 +97,7 @@ segfault:
 }
 
 static void *encryptor(void *ptr) {
+
 	sigset_t set;
 	sigemptyset(&set);
 	sigaddset(&set, SIGSEGV);
@@ -98,25 +105,24 @@ static void *encryptor(void *ptr) {
 	// correct
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
 
+	printf("Thread running\n");
 	while (1) {
 		// NOTE the condition of this loop dictates the end encryption address
-		for (void *address = (void *)TEXT_START; address < (void *)&etext;
+		pthread_mutex_lock(&page_lock);
+		for (void *address = (void *)TEXT_START; address < etext;
 			 address += PAGE_SIZE) {
 			int vm_stat = check_read(address);
-			if (vm_stat != PROT_NONE) {
-				pthread_mutex_lock(&page_lock);
+			if (vm_stat == PROT_READ) {
 				mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 				for (size_t i = 0; i < PAGE_SIZE; i += 16) {
 					AES128_ECB_encrypt_inplace(address + i);
 				}
 				mprotect(address, PAGE_SIZE, PROT_NONE);
-				pthread_mutex_unlock(&page_lock);
-				printf("Encrypted!\n");
+				// printf("Encrypted! %10p\n", address);
 			}
 		}
-		struct timespec sleep_time = {1, 0}; // seconds, nanoseconds
-		while (nanosleep(&sleep_time, &sleep_time))
-			continue;
+		pthread_mutex_unlock(&page_lock);
+		usleep(1000000);
 	}
 	return NULL;
 }
@@ -125,10 +131,21 @@ __attribute__((constructor)) static void segments_ctor() {
 	PAGE_SIZE = sysconf(_SC_PAGESIZE);
 	AES128_SetKey(AES_KEY);
 
+	procstat stats;
+	if (get_proc_info(&stats)) {
+		perror("Proc Stats");
+		exit(-1);
+	}
+	stext = (void *)stats.startcode;
+	etext = (void *)stats.endcode;
+	printf("    program text (etext)      %10p\n", etext);
+	printf("    initialized data (edata)  %10p\n", &edata);
+	printf("    uninitialized data (end)  %10p\n", &end);
 	// initialize the segment addresses since they are not available at compile
 	// time
-	SEG_TEXT.end = &etext;
-	SEG_DATA.start = &etext;
+
+	SEG_TEXT.end = etext;
+	SEG_DATA.start = etext;
 	SEG_DATA.end = &edata;
 	SEG_BSS.start = &edata;
 	SEG_BSS.end = &end;
@@ -142,7 +159,7 @@ __attribute__((constructor)) static void segments_ctor() {
 
 	if (sigaction(SIGSEGV, &sa, &old_handler) < 0) {
 		perror("Signal Handler Installation Failed:");
-		abort();
+		exit(EXIT_FAILURE);
 	}
 
 	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
