@@ -1,68 +1,151 @@
+#include "aes.h"
+#include "vmstat.h"
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+extern int etext, edata, end;
 
 #define TEXT_START_X64 0x400000
 #define TEXT_START_X86 0x08048000
 
-char *libstring = "Denis sucks";
-extern int etext, edata, end;
+#if __x86_64__
+#define TEXT_START TEXT_START_X64
+#endif
+#if __i386__
+#define TEXT_START TEXT_START_X86
+#endif
 
-void print_string(void *from, int size) {
-	printf("Location of library function %10p\n", print_string);
-	for (int i = 0; i < size; i++) {
-		printf("%c", *(char *)(from + i));
+#define IN_TEXT(address) address >= TEXT_START &&address < &etext ? 1 : 0
+#define IN_DATA(address) address >= &etext &&address < &edata ? 1 : 0
+#define IN_BSS(address) address >= &edata &&address < &end ? 1 : 0
+
+typedef struct vm_segment {
+	int prot_flags;
+	void *start;
+	void *end;
+} vm_segment;
+
+static vm_segment SEG_TEXT = {.prot_flags = PROT_READ | PROT_EXEC,
+							  .start = (void *)TEXT_START,
+							  .end = NULL};
+static vm_segment SEG_DATA = {
+	.prot_flags = PROT_READ | PROT_WRITE, .start = NULL, .end = NULL};
+static vm_segment SEG_BSS = {
+	.prot_flags = PROT_READ | PROT_WRITE, .start = NULL, .end = NULL};
+
+static inline vm_segment *address_segment(void *address) {
+	if (IN_TEXT(address))
+		return &SEG_TEXT;
+	if (IN_DATA(address))
+		return &SEG_DATA;
+	if (IN_BSS(address)) {
+		return &SEG_BSS;
 	}
-	printf("\n");
+	return NULL;
 }
 
-void hex_dump(char *desc, void *addr, int len) {
-	int i;
-	unsigned char buff[17];
-	unsigned char *pc = (unsigned char *)addr;
+static struct sigaction old_handler;
+static pthread_t encryptor_thread;
+// I still need a mutex, otherwise the encryptor and decryptor could try and
+// touch the same memory, all memory encryption and decryption operations must
+// lock this
+static pthread_mutex_t page_lock = PTHREAD_MUTEX_INITIALIZER;
+int PAGE_SIZE = 0;
+static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
-	// Output description if given.
-	if (desc != NULL)
-		printf("%s:\n", desc);
-
-	if (len == 0) {
-		printf("  ZERO LENGTH\n");
-		return;
+static void decryptor(int signum, siginfo_t *info, void *context) {
+	void *address = info->si_addr;
+	if (address == NULL)
+		goto segfault;
+// TODO align the address to page boundary
+decrypt:
+	pthread_mutex_lock(&page_lock);
+	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
+	for (size_t i = 0; i < PAGE_SIZE; i += 16) {
+		AES128_ECB_decrypt_inplace(address + i);
 	}
-	if (len < 0) {
-		printf("  NEGATIVE LENGTH: %i\n", len);
-		return;
-	}
+	// TODO need to change the page protection flags back to normal
+	pthread_mutex_unlock(&page_lock);
+	printf("Decrypted!\n");
+	return;
+segfault:
+	// if stdin and stdout buffers are encrypted this might be bad...
+	printf("Real Seg Fault Happened :(\n");
+	old_handler.sa_sigaction(signum, info, context);
+	return;
+}
 
-	// Process every byte in the data.
-	for (i = 0; i < len; i++) {
-		// Multiple of 16 means new line (with line offset).
+static void *encryptor(void *ptr) {
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGSEGV);
+	// this will block sigsegv on this thread, so ensure code from here on is
+	// correct
+	pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-		if ((i % 16) == 0) {
-			// Just don't print ASCII for the zeroth line.
-			if (i != 0)
-				printf("  %s\n", buff);
-
-			// Output the offset.
-			printf("  %04x ", i);
+	while (1) {
+		// NOTE the condition of this loop dictates the end encryption address
+		for (void *address = (void *)TEXT_START; address < (void *)&etext;
+			 address += PAGE_SIZE) {
+			vm_segment *this_segment = address_segment(address);
+			int vm_stat = vmstat(address);
+			if (vm_stat != PROT_NONE) {
+				pthread_mutex_lock(&page_lock);
+				if (vm_stat & PROT_WRITE == 0)
+					mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
+				for (size_t i = 0; i < PAGE_SIZE; i += 16) {
+					AES128_ECB_encrypt_inplace(address + i);
+				}
+				mprotect(address, PAGE_SIZE, PROT_NONE);
+				pthread_mutex_unlock(&page_lock);
+				printf("Encrypted!\n");
+			}
 		}
-
-		// Now the hex code for the specific character.
-		printf(" %02x", pc[i]);
-
-		// And store a printable ASCII character for later.
-		if ((pc[i] < 0x20) || (pc[i] > 0x7e))
-			buff[i % 16] = '.';
-		else
-			buff[i % 16] = pc[i];
-		buff[(i % 16) + 1] = '\0';
+		struct timespec sleep_time = {1, 0}; // seconds, nanoseconds
+		while (nanosleep(&sleep_time, &sleep_time))
+			continue;
 	}
-
-	// Pad out last line if not exactly 16 characters.
-	while ((i % 16) != 0) {
-		printf("   ");
-		i++;
-	}
-
-	// And print the final ASCII bit.
-	printf("  %s\n", buff);
+	return NULL;
 }
+
+__attribute__((constructor)) static void segments_ctor() {
+	PAGE_SIZE = sysconf(_SC_PAGESIZE);
+	AES128_SetKey(AES_KEY);
+
+	// initialize the segment addresses since they are not available at compile
+	// time
+	SEG_TEXT.end = &etext;
+	SEG_DATA.start = &etext;
+	SEG_DATA.end = &edata;
+	SEG_BSS.start = &edata;
+	SEG_BSS.end = &end;
+
+	// setting up signal handler
+	static struct sigaction sa;
+	sa.sa_sigaction = decryptor;
+	sigemptyset(&sa.sa_mask);
+	sigaddset(&sa.sa_mask, SIGSEGV);
+	sa.sa_flags = SA_SIGINFO | SA_RESTART;
+
+	if (sigaction(SIGSEGV, &sa, &old_handler) < 0) {
+		perror("Signal Handler Installation Failed:");
+		abort();
+	}
+
+	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
+	if (iret) {
+		printf("Error - pthread_create() return code: %d\n", iret);
+		exit(EXIT_FAILURE);
+	}
+}
+
+__attribute__((destructor)) static void segments_dtor() {}
