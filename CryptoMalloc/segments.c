@@ -22,9 +22,12 @@ extern int etext, edata, end;
 #define TEXT_START TEXT_START_X86
 #endif
 
-#define IN_TEXT(address) address >= TEXT_START &&address < &etext ? 1 : 0
-#define IN_DATA(address) address >= &etext &&address < &edata ? 1 : 0
-#define IN_BSS(address) address >= &edata &&address < &end ? 1 : 0
+#define IN_TEXT(address)                                                       \
+	(address >= (void *)TEXT_START) && (address < (void *)&etext) ? 1 : 0
+#define IN_DATA(address)                                                       \
+	(address >= (void *)&etext) && (address < (void *)&edata) ? 1 : 0
+#define IN_BSS(address)                                                        \
+	(address >= (void *)&edata) && (address < (void *)&end) ? 1 : 0
 
 typedef struct vm_segment {
 	int prot_flags;
@@ -66,19 +69,22 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	if (address == NULL)
 		goto segfault;
-// TODO align the address to page boundary
-decrypt:
+	vm_segment *this_segment = address_segment(address);
+	if (this_segment == NULL)
+		goto segfault;
+	// align to page boundary
+	address = (void *)((unsigned long)address & ~((unsigned long)4095));
+
 	pthread_mutex_lock(&page_lock);
 	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 	for (size_t i = 0; i < PAGE_SIZE; i += 16) {
 		AES128_ECB_decrypt_inplace(address + i);
 	}
-	// TODO need to change the page protection flags back to normal
+	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
 	pthread_mutex_unlock(&page_lock);
 	printf("Decrypted!\n");
 	return;
 segfault:
-	// if stdin and stdout buffers are encrypted this might be bad...
 	printf("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
 	return;
@@ -96,12 +102,10 @@ static void *encryptor(void *ptr) {
 		// NOTE the condition of this loop dictates the end encryption address
 		for (void *address = (void *)TEXT_START; address < (void *)&etext;
 			 address += PAGE_SIZE) {
-			vm_segment *this_segment = address_segment(address);
-			int vm_stat = vmstat(address);
+			int vm_stat = check_read(address);
 			if (vm_stat != PROT_NONE) {
 				pthread_mutex_lock(&page_lock);
-				if (vm_stat & PROT_WRITE == 0)
-					mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
+				mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 				for (size_t i = 0; i < PAGE_SIZE; i += 16) {
 					AES128_ECB_encrypt_inplace(address + i);
 				}
