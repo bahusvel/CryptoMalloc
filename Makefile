@@ -11,7 +11,7 @@ test:
 	gcc -std=c99 CryptoMallocTest/main.c -o test
 
 clean:
-	rm -f *.o *.so segments
+	rm -f *.o *.so segments binencrypt monitor core segment_test test
 
 aes.o: CryptoMalloc/aes.c
 	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/aes.c
@@ -29,11 +29,16 @@ cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
 segment_test: clean
-	gcc -std=c99 CryptoMallocTest/segment_test.c -o segment_test
+	gcc -std=c99 -ICryptoMalloc/ CryptoMallocTest/segment_test.c -o segment_test
 	./segment_test
 
 segments_run: clean libsegments test
 	LD_PRELOAD=./CryptoSegments.so python2
+
+binencrypt: clean aes.o segment_test
+	gcc -W -Wall -Wextra -O2 -g -std=c99 CryptoTool/main.c -o binencrypt -lelf
+	#gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoTool/main.c
+	./binencrypt segment_test
 
 run:
 	./cmalloc.sh python3

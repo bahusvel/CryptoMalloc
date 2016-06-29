@@ -1,3 +1,4 @@
+#include "procstat.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -17,7 +18,9 @@ int main() {
 	printf("    initialized data (edata)  %10p\n", &edata);
 	printf("    uninitialized data (end)  %10p\n", &end);
 	printf("Location of global variable %10p\n", password);
-	printf("Printing from etext:\n");
-	print_string(&etext, 100);
+	procstat stat;
+	get_proc_info(&stat);
+	printf("stext %10p\n", stat.startcode);
+	printf("etext %10p\n", stat.endcode);
 	exit(EXIT_SUCCESS);
 }

@@ -1,0 +1,26 @@
+This is the output from etext type tests
+program text (etext)        0x40073d
+initialized data (edata)    0x601058
+uninitialized data (end)    0x601060
+
+This is the output from elf tool:
+Entry 0:PHDR vaddr:   0x400040 filesz: 504 memsz: 504 palign: 8 execute read
+Entry 1:INTERP vaddr:   0x400238 filesz: 28 memsz: 28 palign: 1 read
+Entry 2:LOAD vaddr:   0x400000 filesz: 2404 memsz: 2404 palign: 2097152 execute read
+Entry 3:LOAD vaddr:   0x600e10 filesz: 584 memsz: 592 palign: 2097152 read write
+Entry 4:DYNAMIC vaddr:   0x600e28 filesz: 464 memsz: 464 palign: 8 read write
+Entry 5:NOTE vaddr:   0x400254 filesz: 68 memsz: 68 palign: 4 read
+Entry 6:unknown vaddr:   0x400810 filesz: 60 memsz: 60 palign: 4 read
+Entry 7:unknown vaddr:      (nil) filesz: 0 memsz: 0 palign: 16 read write
+Entry 8:unknown vaddr:   0x600e10 filesz: 496 memsz: 496 palign: 1 read
+
+Entry 2: This is clearly the code, however I cant figure out whats up with its offsets
+Adding up the address 0x400000 + 2404 yields 0x400964 which is more than etext... maybe this is page allignment in play?
+Nope not really, both of them are not aligned, is there something else hiding at that address, or maybe etext is a lie, after all I did have different results with /proc/self/stat
+Well it looks like etext is indeed a lie, I need to have a look at where its defined, but it is clearly bullshit and doesnt add up to anything.
+
+The allignment between the Entry 2 and Entry 3 is interesting which causes them to be 0x200000 apart
+
+
+Entry 3: is the data, its loaded after the code, and has read write permissions, if you add up 0x600e10 + (decimal)592 you will get 0x601060 which is the "end" section.
+Entry 4: overlaps entry 3, and is called dynamic... dont know what that means yet
