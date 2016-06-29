@@ -73,14 +73,13 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
+	printf("It tried to access %10p\n", address);
 	if (address == NULL)
 		goto segfault;
 	if (!IN_TEXT(address))
 		goto segfault;
 	// align to page boundary
-	printf("Address %10p\n", address);
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
-	printf("Aligned %10p\n", address);
 	pthread_mutex_lock(&page_lock);
 	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 	for (size_t i = 0; i < PAGE_SIZE; i += 16) {
@@ -109,8 +108,9 @@ static void *encryptor(void *ptr) {
 	while (1) {
 		// NOTE the condition of this loop dictates the end encryption address
 		pthread_mutex_lock(&page_lock);
-		for (void *address = (void *)TEXT_START; address < etext;
-			 address += PAGE_SIZE) {
+		// write(1, "locked\n", 7);
+		for (void *address = (void *)TEXT_START + PAGE_SIZE;
+			 address < etext - PAGE_SIZE; address += PAGE_SIZE) {
 			int vm_stat = check_read(address);
 			if (vm_stat == PROT_READ) {
 				mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
@@ -121,7 +121,9 @@ static void *encryptor(void *ptr) {
 				// printf("Encrypted! %10p\n", address);
 			}
 		}
+		// write(1, "unlocking\n", 10);
 		pthread_mutex_unlock(&page_lock);
+		// write(1, "unlocked\n", 9);
 		usleep(1000000);
 	}
 	return NULL;

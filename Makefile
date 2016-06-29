@@ -14,13 +14,13 @@ clean:
 	rm -f *.o *.so segments
 
 aes.o: CryptoMalloc/aes.c
-	gcc $(CFLAGS) -c CryptoMalloc/aes.c
+	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/aes.c
 
 main.o: CryptoMalloc/main.c
 	gcc $(CFLAGS) -c CryptoMalloc/main.c
 
 segments.o:
-	gcc $(CFLAGS) -c CryptoMalloc/segments.c
+	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/segments.c
 
 libsegments: segments.o aes.o
 	gcc $(LDFLAGS) -o CryptoSegments.so segments.o aes.o -lrt -lpthread
@@ -33,7 +33,7 @@ segment_test: clean
 	./segment_test
 
 segments_run: clean libsegments test
-	LD_PRELOAD=./CryptoSegments.so ./test
+	LD_PRELOAD=./CryptoSegments.so python2
 
 run:
 	./cmalloc.sh python3
