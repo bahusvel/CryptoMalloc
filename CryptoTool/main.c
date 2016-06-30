@@ -120,8 +120,9 @@ typedef struct SectionMemory {
 } SectionMemory;
 
 typedef struct EncryptionOffsets {
+	void *start_address;
 	off_t start;
-	off_t end;
+	off_t size;
 } EncryptionOffsets;
 
 Elf_Scn *get_text_section(Elf *elf_file) {
@@ -149,52 +150,48 @@ EncryptionOffsets get_offsets(Elf_Scn *section) {
 	if (gelf_getshdr(section, &shdr) != &shdr)
 		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
 	EncryptionOffsets offsets;
+	offsets.start_address = (void *)shdr.sh_addr;
 	offsets.start = ((shdr.sh_addr + 4095) & ~4095) - shdr.sh_addr;
 	off_t end_addr = shdr.sh_addr + shdr.sh_size;
-	offsets.end = (end_addr & ~4095) - shdr.sh_addr;
+	offsets.size = (end_addr & ~4095) - shdr.sh_addr;
 	return offsets;
 }
 
-SectionMemory read_section_data(Elf_Scn *section) {
+Elf_Data *read_section_data(Elf_Scn *section) {
 	GElf_Shdr shdr;
 	if (gelf_getshdr(section, &shdr) != &shdr)
 		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
-	void *section_memory = NULL;
-	// TODO fix this, use a buffer instead of a giant malloc
-	if ((section_memory = malloc(shdr.sh_size)) < 0) {
-		perror("Could not allocate memory");
-		exit(-1);
-	}
 	Elf_Data *data = NULL;
-	size_t n = 0;
-	while (n < shdr.sh_size && (data = elf_getdata(section, data)) != NULL) {
-		memcpy(section_memory + n, data->d_buf, data->d_size);
-		n += data->d_size;
+	// TODO apparently there can be more than one data descriptor per segment
+	if ((data = elf_getdata(section, data)) != NULL) {
+		return data;
 	}
-	SectionMemory memory = {.location = section_memory, .size = shdr.sh_size};
-	return memory;
+	return NULL;
 }
-
-void replace_section_data(Elf_Scn *section, SectionMemory memory) {}
 
 void decrypt_text_section(Elf *elf_file, char *key) {}
 
 void encrypt_text_section(Elf *elf_file, char *key) {
 	AES128_SetKey(AES_KEY);
 	Elf_Scn *text_section = get_text_section(elf_file);
-	SectionMemory memory = read_section_data(text_section);
+	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
-	if ((offsets.end - offsets.start) == 0) {
+	if ((offsets.size - offsets.start) == 0) {
 		printf("Nothing to encrypt files .text section is too small\n");
 		exit(-1);
 	} else {
-		printf("start: %lu, end: %lu\n", offsets.start, offsets.end);
-		printf("Going to encrypt %lu pages\n",
-			   (offsets.end - offsets.start) / 4096);
+		printf("Encrypting %lu pages from: %p to: %p\n",
+			   (offsets.size - offsets.start) / 4096,
+			   offsets.start_address + offsets.start,
+			   offsets.start_address + offsets.size);
 	}
-	void *crypto_start = memory.location + offsets.start;
-	for (size_t i = 0; i < offsets.end; i += 16) {
+	void *crypto_start = data->d_buf + offsets.start;
+	for (size_t i = 0; i < offsets.size; i += 16) {
 		AES128_ECB_encrypt_inplace(crypto_start + i);
+	}
+	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
+	if (elf_update(elf_file, ELF_C_WRITE) < 0) {
+		errx(EX_SOFTWARE, "elf_update() failed: %s.", elf_errmsg(-1));
 	}
 }
 
