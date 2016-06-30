@@ -1,5 +1,6 @@
 #ifndef _MEMDUMP_
 #define _MEMDUMP_
+#include <stdio.h>
 #include <stdlib.h>
 
 void print_string(void *from, int size) {

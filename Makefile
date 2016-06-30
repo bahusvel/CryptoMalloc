@@ -36,9 +36,10 @@ segments_run: clean libsegments test
 	LD_PRELOAD=./CryptoSegments.so python2
 
 binencrypt: clean aes.o segment_test
-	gcc -W -Wall -Wextra -O2 -g -std=c99 CryptoTool/main.c -o binencrypt -lelf
-	#gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoTool/main.c
-	./binencrypt segment_test
+	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoTool/main.c -o binencrypt.o
+	gcc -o binencrypt binencrypt.o aes.o -lelf
+
+	./binencrypt /home/denislavrov/python3.5
 
 run:
 	./cmalloc.sh python3

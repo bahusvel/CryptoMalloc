@@ -167,6 +167,7 @@ __attribute__((destructor)) static void crypto_malloc_dtor() {
 	shm_unlink(PID_PATH);
 }
 
+	// hex_dump(".text", memory.location, memory.size);
 void *malloc(size_t size) {
 	if (size == 0)
 		return NULL;
