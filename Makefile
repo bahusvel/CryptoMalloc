@@ -38,8 +38,7 @@ segments_run: clean libsegments test
 binencrypt: clean aes.o segment_test
 	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoTool/main.c -o binencrypt.o
 	gcc -o binencrypt binencrypt.o aes.o -lelf
-
-	./binencrypt /home/denislavrov/python3.5
+	./binencrypt decrypt /home/denislavrov/python3.5
 
 run:
 	./cmalloc.sh python3

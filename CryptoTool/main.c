@@ -169,15 +169,37 @@ Elf_Data *read_section_data(Elf_Scn *section) {
 	return NULL;
 }
 
-void decrypt_text_section(Elf *elf_file, char *key) {}
+void decrypt_text_section(Elf *elf_file, char *key) {
+	AES128_SetKey(AES_KEY);
+	Elf_Scn *text_section = get_text_section(elf_file);
+	Elf_Data *data = read_section_data(text_section);
+	EncryptionOffsets offsets = get_offsets(text_section);
+	if ((offsets.size - offsets.start) <= 0) {
+		printf("Nothing to decrypt, file's .text section is too small\n");
+		exit(-1);
+	} else {
+		printf("Decrypting %lu pages from: %p to: %p\n",
+			   (offsets.size - offsets.start) / 4096,
+			   offsets.start_address + offsets.start,
+			   offsets.start_address + offsets.size);
+	}
+	void *crypto_start = data->d_buf + offsets.start;
+	for (size_t i = 0; i < offsets.size; i += 16) {
+		AES128_ECB_decrypt_inplace(crypto_start + i);
+	}
+	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
+	if (elf_update(elf_file, ELF_C_WRITE) < 0) {
+		errx(EX_SOFTWARE, "elf_update() failed: %s.", elf_errmsg(-1));
+	}
+}
 
 void encrypt_text_section(Elf *elf_file, char *key) {
 	AES128_SetKey(AES_KEY);
 	Elf_Scn *text_section = get_text_section(elf_file);
 	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
-	if ((offsets.size - offsets.start) == 0) {
-		printf("Nothing to encrypt files .text section is too small\n");
+	if ((offsets.size - offsets.start) <= 0) {
+		printf("Nothing to encrypt, file's .text section is too small\n");
 		exit(-1);
 	} else {
 		printf("Encrypting %lu pages from: %p to: %p\n",
@@ -196,14 +218,24 @@ void encrypt_text_section(Elf *elf_file, char *key) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc != 2) {
-		printf("Usage: binencrypt binary\n");
+	if (argc != 3) {
+		printf("Usage: binencrypt (encrypt|decrypt) binary\n");
 		exit(-1);
 	}
-	Elf *elf_file = load_and_check(argv[1]);
+
+	Elf *elf_file = load_and_check(argv[2]);
+	elf_flagelf(
+		elf_file, ELF_C_SET,
+		ELF_F_LAYOUT); // may be needed to avoid libelf moving stuff around
 	// print_pheader(elf_file);
 	print_section_header(elf_file);
-	encrypt_text_section(elf_file, "test");
+	if (strcmp(argv[1], "encrypt") == 0)
+		encrypt_text_section(elf_file, "test");
+	else if (strcmp(argv[1], "decrypt") == 0)
+		decrypt_text_section(elf_file, "test");
+	else
+		printf("Unknown verb %s only 'decrypt' and 'encrypt' are allowed\n",
+			   argv[1]);
 	elf_end(elf_file);
 	close(fd);
 	return 0;
