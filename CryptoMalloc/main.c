@@ -175,7 +175,7 @@ void *malloc(size_t size) {
 	pthread_mutex_lock(&mymutex);
 
 	// try to reuse, freed memory
-	if (fit_node = cor_map_find_fit(&free_map, size)) {
+	if ((fit_node = cor_map_find_fit(&free_map, size)) != NULL) {
 		cor_map_delete(&free_map, fit_node->key);
 		fit_node->flags = CRYPTO_CLEAR;
 		cor_map_set(&mem_map, fit_node);
@@ -185,7 +185,7 @@ void *malloc(size_t size) {
 	off_t foffset = crypto_mem_break;
 	crypto_mem_break += size;
 
-	if (ftruncate64(fd, crypto_mem_break) < 0) {
+	if (ftruncate(fd, crypto_mem_break) < 0) {
 		perror("ftruncate");
 		goto failure;
 	}
