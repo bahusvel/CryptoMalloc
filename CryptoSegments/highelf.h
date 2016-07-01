@@ -157,7 +157,7 @@ Elf_Data *read_section_data(Elf_Scn *section) {
 	if (gelf_getshdr(section, &shdr) != &shdr)
 		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
 	Elf_Data *data = NULL;
-	// TODO apparently there can be more than one data descriptor per segment
+	// FIXME:0 apparently there can be more than one data descriptor per segment
 	if ((data = elf_getdata(section, data)) != NULL) {
 		return data;
 	}
