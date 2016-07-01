@@ -19,7 +19,7 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 
 void decrypt_text_section(Elf *elf_file, char *key) {
 	AES128_SetKey(AES_KEY);
-	Elf_Scn *text_section = get_text_section(elf_file);
+	Elf_Scn *text_section = get_section(elf_file, ".text");
 	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
 	if ((offsets.size - offsets.start) <= 0) {
@@ -43,7 +43,7 @@ void decrypt_text_section(Elf *elf_file, char *key) {
 
 void encrypt_text_section(Elf *elf_file, char *key) {
 	AES128_SetKey(AES_KEY);
-	Elf_Scn *text_section = get_text_section(elf_file);
+	Elf_Scn *text_section = get_section(elf_file, ".text");
 	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
 	if ((offsets.size - offsets.start) <= 0) {

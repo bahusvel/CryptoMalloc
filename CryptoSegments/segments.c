@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "aes.h"
+#include "highelf.h"
 #include "procstat.h"
 #include "vmstat.h"
 #include <errno.h>
@@ -115,8 +116,15 @@ __attribute__((constructor)) static void segments_ctor() {
 
 	// initialize the segment addresses since they are not available at compile
 	// time
-	SEG_TEXT.start = NULL;
-	SEG_TEXT.end = NULL;
+	int fd = 0;
+	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
+	Elf_Scn *text_section = get_section(elf_file, ".text");
+	EncryptionOffsets offsets = get_offsets(text_section);
+	SEG_TEXT.start = offsets.start_address + offsets.start;
+	SEG_TEXT.end = offsets.start_address + offsets.size;
+	elf_end(elf_file);
+	close(fd);
+
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
 

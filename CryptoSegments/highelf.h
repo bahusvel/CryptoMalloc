@@ -7,6 +7,9 @@
 #include <string.h>
 #include <sysexits.h>
 
+#define HE_READ_ONLY 0
+#define HE_READ_WRITE 1
+
 Elf *load_and_check(char *filepath, int *fd, int write) {
 	int open_mode = write ? O_RDWR : O_RDONLY;
 	int elf_mode = write ? ELF_C_RDWR : ELF_C_READ;
@@ -118,7 +121,7 @@ typedef struct EncryptionOffsets {
 	off_t size;
 } EncryptionOffsets;
 
-Elf_Scn *get_text_section(Elf *elf_file) {
+Elf_Scn *get_section(Elf *elf_file, const char *section_name) {
 	size_t shstrndx;
 	if (elf_getshdrstrndx(elf_file, &shstrndx) != 0) {
 		errx(EX_SOFTWARE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
@@ -131,7 +134,7 @@ Elf_Scn *get_text_section(Elf *elf_file) {
 			errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
 		if ((name = elf_strptr(elf_file, shstrndx, shdr.sh_name)) == NULL)
 			errx(EX_SOFTWARE, "elf_strptr() failed: %s.", elf_errmsg(-1));
-		if (strcmp(name, ".text") == 0) {
+		if (strcmp(name, section_name) == 0) {
 			return scn;
 		}
 	}

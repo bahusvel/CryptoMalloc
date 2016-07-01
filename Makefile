@@ -16,16 +16,12 @@ clean:
 aes.o: CryptoMalloc/aes.c
 	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/aes.c
 
-main.o: CryptoMalloc/main.c
-	gcc $(CFLAGS) -c CryptoMalloc/main.c
-
-segments.o:
-	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/segments.c
-
 libsegments: segments.o aes.o
-	gcc $(LDFLAGS) -o CryptoSegments.so segments.o aes.o -lrt -lpthread
+	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoSegments/segments.c
+	gcc $(LDFLAGS) -o CryptoSegments.so segments.o aes.o -lrt -lpthread -lelf
 
-cryptomalloc: main.o aes.o
+cryptomalloc: aes.o
+	gcc $(CFLAGS) -c CryptoMalloc/main.c
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
 segment_test: clean
@@ -36,7 +32,7 @@ segments_run: clean libsegments test
 	LD_PRELOAD=./CryptoSegments.so python2
 
 binencrypt: clean aes.o segment_test
-	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoTool/main.c -o binencrypt.o
+	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoSegments/main.c -o binencrypt.o
 	gcc -o binencrypt binencrypt.o aes.o -lelf
 	./binencrypt decrypt /home/denislavrov/python3.5
 
