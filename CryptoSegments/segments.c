@@ -125,7 +125,7 @@ static void decrypt_segment(vm_segment *segment) {
 	size_t decrypt_size = segment->end - segment->start;
 	mprotect(segment->start, decrypt_size, PROT_READ | PROT_WRITE);
 	for (size_t i = 0; i < decrypt_size; i += 16) {
-		AES128_ECB_encrypt_inplace(segment->start + i);
+		AES128_ECB_decrypt_inplace(segment->start + i);
 	}
 	mprotect(segment->start, decrypt_size, segment->prot_flags);
 }
