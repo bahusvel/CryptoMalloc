@@ -39,7 +39,6 @@ Elf *load_and_check(char *filepath, int *fd, int write) {
 		printf("This is not an elf executable\n");
 		exit(-1);
 	}
-	printf("Initial checks complete starting encryption...\n");
 	return elf_file;
 }
 

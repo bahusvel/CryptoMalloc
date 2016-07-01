@@ -110,12 +110,7 @@ static void *encryptor(void *ptr) {
 	return NULL;
 }
 
-__attribute__((constructor)) static void segments_ctor() {
-	PAGE_SIZE = sysconf(_SC_PAGESIZE);
-	AES128_SetKey(AES_KEY);
-
-	// initialize the segment addresses since they are not available at compile
-	// time
+static void init_segments() {
 	int fd = 0;
 	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
 	Elf_Scn *text_section = get_section(elf_file, ".text");
@@ -124,9 +119,30 @@ __attribute__((constructor)) static void segments_ctor() {
 	SEG_TEXT.end = offsets.start_address + offsets.size;
 	elf_end(elf_file);
 	close(fd);
+}
 
+static void decrypt_segment(vm_segment *segment) {
+	size_t decrypt_size = segment->end - segment->start;
+	mprotect(segment->start, decrypt_size, PROT_READ | PROT_WRITE);
+	for (size_t i = 0; i < decrypt_size; i += 16) {
+		AES128_ECB_encrypt_inplace(segment->start + i);
+	}
+	mprotect(segment->start, decrypt_size, segment->prot_flags);
+}
+
+__attribute__((constructor)) static void segments_ctor() {
+	PAGE_SIZE = sysconf(_SC_PAGESIZE);
+	AES128_SetKey(AES_KEY);
+
+	// initialize the segment addresses since they are not available at compile
+	// time
+	init_segments();
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
+
+	// NOTE only needed in case of dynamic encryption
+	// mprotect(SEG_TEXT.start, SEG_TEXT.end - SEG_TEXT.start, PROT_NONE);
+	decrypt_segment(&SEG_TEXT);
 
 	// setting up signal handler
 	static struct sigaction sa;
