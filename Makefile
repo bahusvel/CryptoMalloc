@@ -37,7 +37,7 @@ dynamic_encryption: clean libsegments binencrypt
 	./binencrypt encrypt ./python3
 	LD_PRELOAD=./CryptoSegments.so ./python3
 
-binencrypt: aes.o segment_test
+binencrypt: aes.o
 	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoSegments/main.c -o binencrypt.o
 	gcc -o binencrypt binencrypt.o aes.o -lelf
 

@@ -19,9 +19,9 @@
 // enables/disables dynamic encryption
 //#define DYNAMIC_ENCRYPTION 1
 // enables/disables dynamic decryption
-//#define DYNAMIC_DECRYPTION 1
-#ifdef DYNAMIC_ENCRYPTION // dynamic decryption MUST be on to support dynamic
-						  // encryption
+#define DYNAMIC_DECRYPTION 1
+
+#ifdef DYNAMIC_ENCRYPTION // MUST be enables to support dynamic encryption
 #define DYNAMIC_DECRYPTION 1
 #endif
 
@@ -79,7 +79,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	}
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
 	pthread_mutex_unlock(&page_lock);
-	printf("Decrypted!\n");
+	// printf("Decrypted!\n");
 	return;
 segfault:
 	printf("Real Seg Fault Happened :(\n");
@@ -138,6 +138,8 @@ static void init_segments() {
 	EncryptionOffsets offsets = get_offsets(text_section);
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
+	printf("start text (etext)      %p\n", SEG_TEXT.start);
+	printf("end text (etext)      %p\n", SEG_TEXT.end);
 	elf_end(elf_file);
 	close(fd);
 }
@@ -157,12 +159,7 @@ static void decrypt_segment(vm_segment *segment) {
 __attribute__((constructor)) static void segments_ctor() {
 	PAGE_SIZE = sysconf(_SC_PAGESIZE);
 	AES128_SetKey(AES_KEY);
-
-	// initialize the segment addresses since they are not available at compile
-	// time
 	init_segments();
-	printf("start text (etext)      %p\n", SEG_TEXT.start);
-	printf("end text (etext)      %p\n", SEG_TEXT.end);
 
 #ifndef DYNAMIC_DECRYPTION
 	decrypt_segment(&SEG_TEXT);
@@ -171,6 +168,9 @@ __attribute__((constructor)) static void segments_ctor() {
 // dump_memory((void *)shdr.sh_addr, shdr.sh_size, "decrypted_loaded.dump");
 
 #ifdef DYNAMIC_DECRYPTION
+	// FIXME change access flags on encrypted text segment, this probably can be
+	// done in the static encryptor itself actually
+	mprotect(SEG_TEXT.start, SEG_TEXT.end - SEG_TEXT.start, PROT_NONE);
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
