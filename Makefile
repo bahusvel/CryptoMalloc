@@ -33,7 +33,7 @@ segments_run: clean libsegments test
 
 dynamic_encryption: clean libsegments binencrypt
 	rm -f ./python3
-	cp /usr/bin/python3.4 ./python3
+	cp /usr/bin/python3.5 ./python3
 	./binencrypt encrypt ./python3
 	LD_PRELOAD=./CryptoSegments.so ./python3
 

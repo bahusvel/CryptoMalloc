@@ -33,6 +33,8 @@ typedef struct vm_segment {
 	int prot_flags;
 	void *start;
 	void *end;
+	void *crypto_start;
+	int fd;
 } vm_segment;
 
 static vm_segment SEG_TEXT = {
@@ -120,17 +122,44 @@ static void *encryptor(void *ptr) {
 }
 #endif
 
-// GElf_Shdr shdr;
+static void remap_segment(vm_segment *segment) {
+	static int segment_count = 0;
+	char path[PATH_MAX];
+	sprintf(path, "/%d_segment%d.mem", getpid(), segment_count++);
+	segment->fd = shm_open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+	if (segment->fd < 0) {
+		perror("segment remap shm_open");
+		exit(-1);
+	}
+	size_t segment_size = segment->end - segment->start;
+	if (ftruncate(segment->fd, segment_size) < 0) {
+		perror("segment remap ftruncate");
+		exit(-1);
+	}
+	segment->crypto_start =
+		mmap(NULL, segment_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED,
+			 segment->fd, 0);
+	if (segment->crypto_start == MAP_FAILED) {
+		perror("segment remap mmap_crypto");
+		exit(-1);
+	}
+	memcpy(segment->crypto_start, segment->start, segment_size);
+	munmap(segment->start, segment_size);
+	void *new_mmap = mmap(segment->start, segment_size, segment->prot_flags,
+						  MAP_SHARED, segment->fd, 0);
+	if (new_mmap != segment->start) {
+		perror("segment remap mmap_clear");
+		exit(-1);
+	}
+}
+
+// TODO unlink all the shared memory files
+static void fini_segments() {}
+
 static void init_segments() {
 	int fd = 0;
 	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
 	Elf_Scn *text_section = get_section(elf_file, ".text");
-	/* dump memory in case of stupidity
-	if (gelf_getshdr(text_section, &shdr) != &shdr)
-		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
-
-	dump_memory((void *)shdr.sh_addr, shdr.sh_size, "encrypted_loaded.dump");
-	*/
 	EncryptionOffsets offsets = get_offsets(text_section);
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
@@ -158,8 +187,6 @@ __attribute__((constructor)) static void segments_ctor() {
 #ifndef DYNAMIC_DECRYPTION
 	decrypt_segment(&SEG_TEXT);
 #endif
-// cannot call by itself, needs the dump call from above
-// dump_memory((void *)shdr.sh_addr, shdr.sh_size, "decrypted_loaded.dump");
 
 #ifdef DYNAMIC_DECRYPTION
 	// FIXME change access flags on encrypted text segment, this probably can be
