@@ -1,3 +1,6 @@
+#ifndef __HIGH_ELF__
+#define __HIGH_ELF__
+
 #include <err.h>
 #include <fcntl.h>
 #include <gelf.h>
@@ -6,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #define HE_READ_ONLY 0
 #define HE_READ_WRITE 1
@@ -109,15 +113,10 @@ void print_section_header(Elf *elf_file) {
 	}
 }
 
-typedef struct SectionMemory {
-	void *location;
-	size_t size;
-} SectionMemory;
-
 typedef struct EncryptionOffsets {
 	void *start_address;
 	off_t start;
-	off_t size;
+	off_t end;
 } EncryptionOffsets;
 
 Elf_Scn *get_section(Elf *elf_file, const char *section_name) {
@@ -148,7 +147,7 @@ EncryptionOffsets get_offsets(Elf_Scn *section) {
 	offsets.start_address = (void *)shdr.sh_addr;
 	offsets.start = ((shdr.sh_addr + 4095) & ~4095) - shdr.sh_addr;
 	off_t end_addr = shdr.sh_addr + shdr.sh_size;
-	offsets.size = (end_addr & ~4095) - shdr.sh_addr;
+	offsets.end = (end_addr & ~4095) - shdr.sh_addr;
 	return offsets;
 }
 
@@ -163,3 +162,19 @@ Elf_Data *read_section_data(Elf_Scn *section) {
 	}
 	return NULL;
 }
+
+void dump_section(Elf_Scn *section, char *path) {
+	Elf_Data *data = read_section_data(section);
+	int fd = 0;
+	if ((fd = open(path, O_WRONLY | O_CREAT, 0777)) < 0) {
+		perror("Cannot open dump file");
+		exit(-1);
+	}
+	if ((write(fd, data->d_buf, data->d_size)) <= 0) {
+		perror("Could not write to file");
+		exit(-1);
+	}
+	close(fd);
+}
+
+#endif // __HIGH_ELF__

@@ -22,17 +22,17 @@ void decrypt_text_section(Elf *elf_file, char *key) {
 	Elf_Scn *text_section = get_section(elf_file, ".text");
 	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
-	if ((offsets.size - offsets.start) <= 0) {
+	size_t crypto_size = offsets.end - offsets.start;
+	if (crypto_size <= 0) {
 		printf("Nothing to decrypt, file's .text section is too small\n");
 		exit(-1);
 	} else {
-		printf("Decrypting %lu pages from: %p to: %p\n",
-			   (offsets.size - offsets.start) / 4096,
+		printf("Decrypting %lu bytes from: %p to: %p\n", crypto_size,
 			   offsets.start_address + offsets.start,
-			   offsets.start_address + offsets.size);
+			   offsets.start_address + offsets.end);
 	}
 	void *crypto_start = data->d_buf + offsets.start;
-	for (size_t i = 0; i < offsets.size; i += 16) {
+	for (size_t i = 0; i < crypto_size; i += 16) {
 		AES128_ECB_decrypt_inplace(crypto_start + i);
 	}
 	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
@@ -46,17 +46,17 @@ void encrypt_text_section(Elf *elf_file, char *key) {
 	Elf_Scn *text_section = get_section(elf_file, ".text");
 	Elf_Data *data = read_section_data(text_section);
 	EncryptionOffsets offsets = get_offsets(text_section);
-	if ((offsets.size - offsets.start) <= 0) {
+	size_t crypto_size = offsets.end - offsets.start;
+	if (crypto_size <= 0) {
 		printf("Nothing to encrypt, file's .text section is too small\n");
 		exit(-1);
 	} else {
-		printf("Encrypting %lu pages from: %p to: %p\n",
-			   (offsets.size - offsets.start) / 4096,
+		printf("Encrypting %lu byes from: %p to: %p\n", crypto_size,
 			   offsets.start_address + offsets.start,
-			   offsets.start_address + offsets.size);
+			   offsets.start_address + offsets.end);
 	}
 	void *crypto_start = data->d_buf + offsets.start;
-	for (size_t i = 0; i < offsets.size; i += 16) {
+	for (size_t i = 0; i < crypto_size; i += 16) {
 		AES128_ECB_encrypt_inplace(crypto_start + i);
 	}
 	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
@@ -70,7 +70,6 @@ int main(int argc, char *argv[]) {
 		printf("Usage: binencrypt (encrypt|decrypt) binary\n");
 		exit(-1);
 	}
-
 	Elf *elf_file = load_and_check(argv[2], &fd, 1);
 	elf_flagelf(elf_file, ELF_C_SET, ELF_F_LAYOUT); // ensure consistent layout
 	print_section_header(elf_file);
@@ -78,7 +77,10 @@ int main(int argc, char *argv[]) {
 		encrypt_text_section(elf_file, "test");
 	else if (strcmp(argv[1], "decrypt") == 0)
 		decrypt_text_section(elf_file, "test");
-	else
+	else if (strcmp(argv[1], "dump") == 0) {
+		Elf_Scn *text_section = get_section(elf_file, ".text");
+		dump_section(text_section, "text.dump");
+	} else
 		printf("Unknown verb %s only 'decrypt' and 'encrypt' are allowed\n",
 			   argv[1]);
 	elf_end(elf_file);

@@ -1,7 +1,9 @@
 #ifndef _MEMDUMP_
 #define _MEMDUMP_
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 void print_string(void *from, int size) {
 	printf("Location of library function %10p\n", print_string);
@@ -52,6 +54,19 @@ static void hex_dump(char *desc, void *addr, int len) {
 	}
 	// And print the final ASCII bit.
 	printf("  %s\n", buff);
+}
+
+void dump_memory(void *address, size_t size, char *path) {
+	int fd = 0;
+	if ((fd = open(path, O_WRONLY | O_CREAT, 0777)) < 0) {
+		perror("Cannot open dump file");
+		exit(-1);
+	}
+	if ((write(fd, address, size)) <= 0) {
+		perror("Could not write to file");
+		exit(-1);
+	}
+	close(fd);
 }
 
 #endif //_MEMDUMP_
