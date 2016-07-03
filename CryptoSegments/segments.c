@@ -16,8 +16,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// enables dynamic encryption
+// enables/disables dynamic encryption
 //#define DYNAMIC_ENCRYPTION 1
+// enables/disables dynamic decryption
+//#define DYNAMIC_DECRYPTION 1
+#ifdef DYNAMIC_ENCRYPTION // dynamic decryption MUST be on to support dynamic
+						  // encryption
+#define DYNAMIC_DECRYPTION 1
+#endif
 
 /* NOTE the addresses here are not actual addresses of those segments but their
  * PAGE aligned version, this is done because page access permissions can only
@@ -55,6 +61,7 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
+#ifdef DYNAMIC_DECRYPTION
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	printf("It tried to access %p\n", address);
@@ -79,7 +86,9 @@ segfault:
 	old_handler.sa_sigaction(signum, info, context);
 	return;
 }
+#endif
 
+#ifdef DYNAMIC_ENCRYPTION
 static void *encryptor(void *ptr) {
 
 	sigset_t set;
@@ -113,19 +122,19 @@ static void *encryptor(void *ptr) {
 	}
 	return NULL;
 }
+#endif
 
-GElf_Shdr shdr;
-
+// GElf_Shdr shdr;
 static void init_segments() {
 	int fd = 0;
 	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
 	Elf_Scn *text_section = get_section(elf_file, ".text");
-
+	/* dump memory in case of stupidity
 	if (gelf_getshdr(text_section, &shdr) != &shdr)
 		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
 
 	dump_memory((void *)shdr.sh_addr, shdr.sh_size, "encrypted_loaded.dump");
-
+	*/
 	EncryptionOffsets offsets = get_offsets(text_section);
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
@@ -133,6 +142,7 @@ static void init_segments() {
 	close(fd);
 }
 
+#ifndef DYNAMIC_DECRYPTION
 static void decrypt_segment(vm_segment *segment) {
 	size_t decrypt_size = segment->end - segment->start;
 	printf("Decryption size is: %lu\n", decrypt_size);
@@ -142,6 +152,7 @@ static void decrypt_segment(vm_segment *segment) {
 	}
 	mprotect(segment->start, decrypt_size, segment->prot_flags);
 }
+#endif
 
 __attribute__((constructor)) static void segments_ctor() {
 	PAGE_SIZE = sysconf(_SC_PAGESIZE);
@@ -153,10 +164,13 @@ __attribute__((constructor)) static void segments_ctor() {
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
 
+#ifndef DYNAMIC_DECRYPTION
 	decrypt_segment(&SEG_TEXT);
+#endif
+// cannot call by itself, needs the dump call from above
+// dump_memory((void *)shdr.sh_addr, shdr.sh_size, "decrypted_loaded.dump");
 
-	dump_memory((void *)shdr.sh_addr, shdr.sh_size, "decrypted_loaded.dump");
-
+#ifdef DYNAMIC_DECRYPTION
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
@@ -168,6 +182,8 @@ __attribute__((constructor)) static void segments_ctor() {
 		perror("Signal Handler Installation Failed:");
 		exit(EXIT_FAILURE);
 	}
+#endif
+
 #ifdef DYNAMIC_ENCRYPTION
 	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
 	if (iret) {
