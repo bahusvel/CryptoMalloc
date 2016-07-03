@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 // enables/disables dynamic encryption
-#define DYNAMIC_ENCRYPTION 1
+//#define DYNAMIC_ENCRYPTION 1
 // enables/disables dynamic decryption
 #define DYNAMIC_DECRYPTION 1
 
@@ -75,10 +75,10 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 		goto segfault;
 	// align to page boundary
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
+	void *crypto_addr =
+		address - this_segment->start + this_segment->crypto_start;
 	pthread_mutex_lock(&page_lock);
-	// FIXME convert this to use a crypto address
-	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
-	AES128_ECB_decrypt_buffer(address, PAGE_SIZE);
+	AES128_ECB_decrypt_buffer(crypto_addr, PAGE_SIZE);
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
 	pthread_mutex_unlock(&page_lock);
 	// printf("Decrypted!\n");
@@ -104,17 +104,15 @@ static void *encryptor(void *ptr) {
 	while (1) {
 		pthread_mutex_lock(&page_lock);
 		// write(1, "locked\n", 7);
-		void *crypto_address;
-		void *real_address;
-		for (crypto_address = SEG_TEXT.crypto_start,
-			real_address = SEG_TEXT.start;
-			 real_address < SEG_TEXT.end;
+		void *crypto_address = SEG_TEXT.crypto_start;
+		void *real_address = SEG_TEXT.start;
+		for (; real_address < SEG_TEXT.end;
 			 crypto_address += PAGE_SIZE, real_address += PAGE_SIZE) {
 			int vm_stat = check_read(real_address); // FIXME get rid of this
 			if (vm_stat == PROT_READ) {
 				mprotect(real_address, PAGE_SIZE, PROT_NONE);
 				AES128_ECB_encrypt_buffer(crypto_address, PAGE_SIZE);
-				// printf("Encrypted! %10p\n", address);
+				printf("Encrypted! %10p\n", address);
 			}
 		}
 		// write(1, "unlocking\n", 10);
@@ -168,9 +166,7 @@ static void init_segments() {
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
 	SEG_TEXT.size = SEG_TEXT.end - SEG_TEXT.start;
-#ifdef DYNAMIC_ENCRYPTION
 	remap_segment(&SEG_TEXT);
-#endif
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
 
