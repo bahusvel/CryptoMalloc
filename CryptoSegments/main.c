@@ -32,9 +32,7 @@ void decrypt_text_section(Elf *elf_file, char *key) {
 			   offsets.start_address + offsets.end);
 	}
 	void *crypto_start = data->d_buf + offsets.start;
-	for (size_t i = 0; i < crypto_size; i += 16) {
-		AES128_ECB_decrypt_inplace(crypto_start + i);
-	}
+	AES128_ECB_decrypt_buffer(crypto_start, crypto_size);
 	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
 	if (elf_update(elf_file, ELF_C_WRITE) < 0) {
 		errx(EX_SOFTWARE, "elf_update() failed: %s.", elf_errmsg(-1));
@@ -56,9 +54,7 @@ void encrypt_text_section(Elf *elf_file, char *key) {
 			   offsets.start_address + offsets.end);
 	}
 	void *crypto_start = data->d_buf + offsets.start;
-	for (size_t i = 0; i < crypto_size; i += 16) {
-		AES128_ECB_encrypt_inplace(crypto_start + i);
-	}
+	AES128_ECB_encrypt_buffer(crypto_start, crypto_size);
 	elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
 	if (elf_update(elf_file, ELF_C_WRITE) < 0) {
 		errx(EX_SOFTWARE, "elf_update() failed: %s.", elf_errmsg(-1));

@@ -74,9 +74,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
 	pthread_mutex_lock(&page_lock);
 	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
-	for (size_t i = 0; i < PAGE_SIZE; i += 16) {
-		AES128_ECB_decrypt_inplace(address + i);
-	}
+	AES128_ECB_decrypt_buffer(address, PAGE_SIZE);
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
 	pthread_mutex_unlock(&page_lock);
 	// printf("Decrypted!\n");
@@ -108,9 +106,7 @@ static void *encryptor(void *ptr) {
 			int vm_stat = check_read(address);
 			if (vm_stat == PROT_READ) {
 				mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
-				for (size_t i = 0; i < PAGE_SIZE; i += 16) {
-					AES128_ECB_encrypt_inplace(address + i);
-				}
+				AES128_ECB_encrypt_buffer(address, PAGE_SIZE);
 				mprotect(address, PAGE_SIZE, PROT_NONE);
 				// printf("Encrypted! %10p\n", address);
 			}
@@ -149,9 +145,7 @@ static void decrypt_segment(vm_segment *segment) {
 	size_t decrypt_size = segment->end - segment->start;
 	printf("Decryption size is: %lu\n", decrypt_size);
 	mprotect(segment->start, decrypt_size, PROT_READ | PROT_WRITE);
-	for (size_t i = 0; i < decrypt_size; i += 16) {
-		AES128_ECB_decrypt_inplace(segment->start + i);
-	}
+	AES128_ECB_decrypt_buffer(segment->start, decrypt_size);
 	mprotect(segment->start, decrypt_size, segment->prot_flags);
 }
 #endif
