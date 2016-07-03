@@ -9,7 +9,7 @@
 
 static int fd = -2;
 
-int check_read(void *address) {
+int check_read(void *address) { // I think this does something stupid...
 	int stat = PROT_NONE;
 	if (fd == -2)
 		fd = open("/dev/null", O_RDWR);

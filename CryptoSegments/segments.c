@@ -112,7 +112,7 @@ static void *encryptor(void *ptr) {
 			if (vm_stat == PROT_READ) {
 				mprotect(real_address, PAGE_SIZE, PROT_NONE);
 				AES128_ECB_encrypt_buffer(crypto_address, PAGE_SIZE);
-				printf("Encrypted! %10p\n", address);
+				printf("Encrypted! %10p\n", real_address);
 			}
 		}
 		// write(1, "unlocking\n", 10);
