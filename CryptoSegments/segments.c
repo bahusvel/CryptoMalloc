@@ -17,12 +17,14 @@
 #include <unistd.h>
 
 // enables/disables dynamic encryption
-//#define DYNAMIC_ENCRYPTION 1
+#define DYNAMIC_ENCRYPTION 1
 // enables/disables dynamic decryption
 #define DYNAMIC_DECRYPTION 1
 
 #ifdef DYNAMIC_ENCRYPTION // MUST be enables to support dynamic encryption
+#ifndef DYNAMIC_DECRYPTION
 #define DYNAMIC_DECRYPTION 1
+#endif
 #endif
 
 /* NOTE the addresses here are not actual addresses of those segments but their
@@ -74,6 +76,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	// align to page boundary
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
 	pthread_mutex_lock(&page_lock);
+	// FIXME convert this to use a crypto address
 	mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
 	AES128_ECB_decrypt_buffer(address, PAGE_SIZE);
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
@@ -99,16 +102,18 @@ static void *encryptor(void *ptr) {
 
 	printf("Thread running\n");
 	while (1) {
-		// NOTE the condition of this loop dictates the end encryption address
 		pthread_mutex_lock(&page_lock);
 		// write(1, "locked\n", 7);
-		for (void *address = SEG_TEXT.start; address < SEG_TEXT.end;
-			 address += PAGE_SIZE) {
-			int vm_stat = check_read(address);
+		void *crypto_address;
+		void *real_address;
+		for (crypto_address = SEG_TEXT.crypto_start,
+			real_address = SEG_TEXT.start;
+			 real_address < SEG_TEXT.end;
+			 crypto_address += PAGE_SIZE, real_address += PAGE_SIZE) {
+			int vm_stat = check_read(real_address); // FIXME get rid of this
 			if (vm_stat == PROT_READ) {
-				mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
-				AES128_ECB_encrypt_buffer(address, PAGE_SIZE);
-				mprotect(address, PAGE_SIZE, PROT_NONE);
+				mprotect(real_address, PAGE_SIZE, PROT_NONE);
+				AES128_ECB_encrypt_buffer(crypto_address, PAGE_SIZE);
 				// printf("Encrypted! %10p\n", address);
 			}
 		}
@@ -163,7 +168,9 @@ static void init_segments() {
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
 	SEG_TEXT.size = SEG_TEXT.end - SEG_TEXT.start;
+#ifdef DYNAMIC_ENCRYPTION
 	remap_segment(&SEG_TEXT);
+#endif
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
 
