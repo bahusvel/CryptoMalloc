@@ -33,16 +33,15 @@ typedef struct vm_segment {
 	int prot_flags;
 	void *start;
 	void *end;
+	size_t size;
 	void *crypto_start;
 	int fd;
 } vm_segment;
 
-static vm_segment SEG_TEXT = {
-	.prot_flags = PROT_READ | PROT_EXEC, .start = NULL, .end = NULL};
+static vm_segment SEG_TEXT = {.prot_flags = PROT_READ | PROT_EXEC, .fd = -1};
 
 // NOTE DATA and BSS are considered the same here
-static vm_segment SEG_DATA = {
-	.prot_flags = PROT_READ | PROT_WRITE, .start = NULL, .end = NULL};
+static vm_segment SEG_DATA = {.prot_flags = PROT_READ | PROT_WRITE, .fd = -1};
 
 static inline vm_segment *address_segment(void *address) {
 	if (address >= SEG_TEXT.start && address <= SEG_TEXT.end)
@@ -131,21 +130,20 @@ static void remap_segment(vm_segment *segment) {
 		perror("segment remap shm_open");
 		exit(-1);
 	}
-	size_t segment_size = segment->end - segment->start;
-	if (ftruncate(segment->fd, segment_size) < 0) {
+	if (ftruncate(segment->fd, segment->size) < 0) {
 		perror("segment remap ftruncate");
 		exit(-1);
 	}
 	segment->crypto_start =
-		mmap(NULL, segment_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED,
-			 segment->fd, 0);
+		mmap(NULL, segment->size, PROT_READ | PROT_WRITE | PROT_EXEC,
+			 MAP_SHARED, segment->fd, 0);
 	if (segment->crypto_start == MAP_FAILED) {
 		perror("segment remap mmap_crypto");
 		exit(-1);
 	}
-	memcpy(segment->crypto_start, segment->start, segment_size);
-	munmap(segment->start, segment_size);
-	void *new_mmap = mmap(segment->start, segment_size, segment->prot_flags,
+	memcpy(segment->crypto_start, segment->start, segment->size);
+	munmap(segment->start, segment->size);
+	void *new_mmap = mmap(segment->start, segment->size, segment->prot_flags,
 						  MAP_SHARED, segment->fd, 0);
 	if (new_mmap != segment->start) {
 		perror("segment remap mmap_clear");
@@ -159,23 +157,26 @@ static void fini_segments() {}
 static void init_segments() {
 	int fd = 0;
 	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
+
 	Elf_Scn *text_section = get_section(elf_file, ".text");
 	EncryptionOffsets offsets = get_offsets(text_section);
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
+	SEG_TEXT.size = SEG_TEXT.end - SEG_TEXT.start;
+	remap_segment(&SEG_TEXT);
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
+
 	elf_end(elf_file);
 	close(fd);
 }
 
 #ifndef DYNAMIC_DECRYPTION
 static void decrypt_segment(vm_segment *segment) {
-	size_t decrypt_size = segment->end - segment->start;
-	printf("Decryption size is: %lu\n", decrypt_size);
-	mprotect(segment->start, decrypt_size, PROT_READ | PROT_WRITE);
-	AES128_ECB_decrypt_buffer(segment->start, decrypt_size);
-	mprotect(segment->start, decrypt_size, segment->prot_flags);
+	printf("Decryption size is: %lu\n", segment->size);
+	mprotect(segment->start, segment->size, PROT_READ | PROT_WRITE);
+	AES128_ECB_decrypt_buffer(segment->start, segment->size);
+	mprotect(segment->start, segment->size, segment->prot_flags);
 }
 #endif
 
@@ -191,7 +192,7 @@ __attribute__((constructor)) static void segments_ctor() {
 #ifdef DYNAMIC_DECRYPTION
 	// FIXME change access flags on encrypted text segment, this probably can be
 	// done in the static encryptor itself actually
-	mprotect(SEG_TEXT.start, SEG_TEXT.end - SEG_TEXT.start, PROT_NONE);
+	mprotect(SEG_TEXT.start, SEG_TEXT.size, PROT_NONE);
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
