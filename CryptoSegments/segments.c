@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "aes.h"
+#include "bitset.h"
 #include "highelf.h"
 #include "memdump.h"
 #include "procstat.h"
@@ -17,7 +18,7 @@
 #include <unistd.h>
 
 // enables/disables dynamic encryption
-//#define DYNAMIC_ENCRYPTION 1
+#define DYNAMIC_ENCRYPTION 1
 // enables/disables dynamic decryption
 #define DYNAMIC_DECRYPTION 1
 
@@ -27,8 +28,10 @@
 #endif
 #endif
 
-/* NOTE the addresses here are not actual addresses of those segments but their
- * PAGE aligned version, this is done because page access permissions can only
+/* NOTE the addresses here are not actual addresses of those segments but
+ * their
+ * PAGE aligned version, this is done because page access permissions can
+ * only
  * be set on page by page basis, and this software relies on them heavily.
 */
 typedef struct vm_segment {
@@ -37,6 +40,7 @@ typedef struct vm_segment {
 	void *end;
 	size_t size;
 	void *crypto_start;
+	unsigned char *stat_bitset;
 	int fd;
 } vm_segment;
 
@@ -77,9 +81,16 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	address = (void *)((unsigned long)address & ~((unsigned long)4095));
 	void *crypto_addr =
 		address - this_segment->start + this_segment->crypto_start;
+	unsigned int stat_bit = (address - this_segment->start) / 4096;
 	pthread_mutex_lock(&page_lock);
+	if (!BITSET(this_segment->stat_bitset, stat_bit)) {
+		printf("%p is not encrypted!\n", address);
+		pthread_mutex_unlock(&page_lock);
+		goto segfault;
+	}
 	AES128_ECB_decrypt_buffer(crypto_addr, PAGE_SIZE);
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
+	BITSET(this_segment->stat_bitset, stat_bit);
 	pthread_mutex_unlock(&page_lock);
 	// printf("Decrypted!\n");
 	return;
@@ -106,12 +117,14 @@ static void *encryptor(void *ptr) {
 		// write(1, "locked\n", 7);
 		void *crypto_address = SEG_TEXT.crypto_start;
 		void *real_address = SEG_TEXT.start;
-		for (; real_address < SEG_TEXT.end;
-			 crypto_address += PAGE_SIZE, real_address += PAGE_SIZE) {
-			int vm_stat = check_read(real_address); // FIXME get rid of this
-			if (vm_stat == PROT_READ) {
+		unsigned int stat_bit = 0;
+		for (; real_address < SEG_TEXT.end; crypto_address += PAGE_SIZE,
+											real_address += PAGE_SIZE,
+											stat_bit++) {
+			if (!BITTEST(SEG_TEXT.stat_bitset, stat_bit)) {
 				mprotect(real_address, PAGE_SIZE, PROT_NONE);
 				AES128_ECB_encrypt_buffer(crypto_address, PAGE_SIZE);
+				BITSET(SEG_TEXT.stat_bitset, stat_bit);
 				printf("Encrypted! %10p\n", real_address);
 			}
 		}
@@ -166,6 +179,7 @@ static void init_segments() {
 	SEG_TEXT.start = offsets.start_address + offsets.start;
 	SEG_TEXT.end = offsets.start_address + offsets.end;
 	SEG_TEXT.size = SEG_TEXT.end - SEG_TEXT.start;
+	SEG_TEXT.stat_bitset = malloc(BITNSLOTS(SEG_TEXT.size / 4096));
 	remap_segment(&SEG_TEXT);
 	printf("start text (etext)      %p\n", SEG_TEXT.start);
 	printf("end text (etext)      %p\n", SEG_TEXT.end);
@@ -196,6 +210,8 @@ __attribute__((constructor)) static void segments_ctor() {
 	// FIXME change access flags on encrypted text segment, this probably can be
 	// done in the static encryptor itself actually
 	mprotect(SEG_TEXT.start, SEG_TEXT.size, PROT_NONE);
+	// set all bits as encrypted
+	memset(SEG_TEXT.stat_bitset, 0xFF, (SEG_TEXT.size / 4096) / 8);
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
