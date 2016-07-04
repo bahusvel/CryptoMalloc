@@ -126,6 +126,8 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 #ifdef __APPLE__
 	__libc_malloc = dlsym(RTLD_NEXT, "malloc");
 	__libc_free = dlsym(RTLD_NEXT, "free");
+	__libc_realloc = dlsym(RTLD_NEXT, "realloc");
+	__libc_calloc = dlsym(RTLD_NEXT, "calloc");
 #endif
 
 	sprintf(PID_PATH, "/%d.mem", getpid());
