@@ -83,14 +83,14 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 		address - this_segment->start + this_segment->crypto_start;
 	unsigned int stat_bit = (address - this_segment->start) / 4096;
 	pthread_mutex_lock(&page_lock);
-	if (!BITSET(this_segment->stat_bitset, stat_bit)) {
+	if (!BITTEST(this_segment->stat_bitset, stat_bit)) {
 		printf("%p is not encrypted!\n", address);
 		pthread_mutex_unlock(&page_lock);
 		goto segfault;
 	}
 	AES128_ECB_decrypt_buffer(crypto_addr, PAGE_SIZE);
 	mprotect(address, PAGE_SIZE, this_segment->prot_flags);
-	BITSET(this_segment->stat_bitset, stat_bit);
+	BITCLEAR(this_segment->stat_bitset, stat_bit);
 	pthread_mutex_unlock(&page_lock);
 	// printf("Decrypted!\n");
 	return;
@@ -211,7 +211,7 @@ __attribute__((constructor)) static void segments_ctor() {
 	// done in the static encryptor itself actually
 	mprotect(SEG_TEXT.start, SEG_TEXT.size, PROT_NONE);
 	// set all bits as encrypted
-	memset(SEG_TEXT.stat_bitset, 0xFF, (SEG_TEXT.size / 4096) / 8);
+	memset(SEG_TEXT.stat_bitset, ~0, BITNSLOTS(SEG_TEXT.size / 4096));
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
