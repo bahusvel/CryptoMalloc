@@ -71,7 +71,7 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 #ifdef DYNAMIC_DECRYPTION
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
-	printf("It tried to access %p\n", address);
+	// printf("It tried to access %p\n", address);
 	if (address == NULL)
 		goto segfault;
 	vm_segment *this_segment = address_segment(address);
@@ -125,7 +125,7 @@ static void *encryptor(void *ptr) {
 				mprotect(real_address, PAGE_SIZE, PROT_NONE);
 				AES128_ECB_encrypt_buffer(crypto_address, PAGE_SIZE);
 				BITSET(SEG_TEXT.stat_bitset, stat_bit);
-				printf("Encrypted! %10p\n", real_address);
+				// printf("Encrypted! %10p\n", real_address);
 			}
 		}
 		// write(1, "unlocking\n", 10);
