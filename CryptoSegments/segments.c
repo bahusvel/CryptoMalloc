@@ -19,14 +19,6 @@
 
 // enables/disables dynamic encryption
 #define DYNAMIC_ENCRYPTION 1
-// enables/disables dynamic decryption
-#define DYNAMIC_DECRYPTION 1
-
-#ifdef DYNAMIC_ENCRYPTION // MUST be enables to support dynamic encryption
-#ifndef DYNAMIC_DECRYPTION
-#define DYNAMIC_DECRYPTION 1
-#endif
-#endif
 
 /* NOTE the addresses here are not actual addresses of those segments but
  * their
@@ -68,7 +60,6 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
-#ifdef DYNAMIC_DECRYPTION
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	// printf("It tried to access %p\n", address);
@@ -99,7 +90,6 @@ segfault:
 	old_handler.sa_sigaction(signum, info, context);
 	return;
 }
-#endif
 
 #ifdef DYNAMIC_ENCRYPTION
 static void *encryptor(void *ptr) {
@@ -138,9 +128,9 @@ static void *encryptor(void *ptr) {
 #endif
 
 static void remap_segment(vm_segment *segment) {
-	static int segment_count = 0;
 	char path[PATH_MAX];
-	sprintf(path, "/%d_segment%d.mem", getpid(), segment_count++);
+	sprintf(path, "/%d_segment%p-%p.mem", getpid(), segment->start,
+			segment->end);
 	segment->fd = shm_open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (segment->fd < 0) {
 		perror("segment remap shm_open");
@@ -167,51 +157,43 @@ static void remap_segment(vm_segment *segment) {
 	}
 }
 
-// TODO unlink all the shared memory files
-static void fini_segments() {}
+static void fini_segment(vm_segment *segment) {
+	char path[PATH_MAX];
+	sprintf(path, "/%d_segment%p-%p.mem", getpid(), segment->start,
+			segment->end);
+	shm_unlink(path);
+}
+
+static void init_segment(const char *name, Elf *elf_file, vm_segment *segment) {
+	Elf_Scn *text_section = get_section(elf_file, name);
+	EncryptionOffsets offsets = get_offsets(text_section);
+	segment->start = offsets.start_address + offsets.start;
+	segment->end = offsets.start_address + offsets.end;
+	segment->size = segment->end - segment->start;
+	segment->stat_bitset = malloc(BITNSLOTS(segment->size / 4096));
+	remap_segment(segment);
+	mprotect(segment->start, segment->size, PROT_NONE);
+	// set all bits as encrypted
+	memset(segment->stat_bitset, ~0, BITNSLOTS(segment->size / 4096));
+	printf("start text (etext)      %p\n", segment->start);
+	printf("end text (etext)      %p\n", segment->end);
+}
 
 static void init_segments() {
 	int fd = 0;
 	Elf *elf_file = load_and_check("/proc/self/exe", &fd, 0);
 
-	Elf_Scn *text_section = get_section(elf_file, ".text");
-	EncryptionOffsets offsets = get_offsets(text_section);
-	SEG_TEXT.start = offsets.start_address + offsets.start;
-	SEG_TEXT.end = offsets.start_address + offsets.end;
-	SEG_TEXT.size = SEG_TEXT.end - SEG_TEXT.start;
-	SEG_TEXT.stat_bitset = malloc(BITNSLOTS(SEG_TEXT.size / 4096));
-	remap_segment(&SEG_TEXT);
-	printf("start text (etext)      %p\n", SEG_TEXT.start);
-	printf("end text (etext)      %p\n", SEG_TEXT.end);
+	init_segment(".text", elf_file, &SEG_TEXT);
 
 	elf_end(elf_file);
 	close(fd);
 }
-
-#ifndef DYNAMIC_DECRYPTION
-static void decrypt_segment(vm_segment *segment) {
-	printf("Decryption size is: %lu\n", segment->size);
-	mprotect(segment->start, segment->size, PROT_READ | PROT_WRITE);
-	AES128_ECB_decrypt_buffer(segment->start, segment->size);
-	mprotect(segment->start, segment->size, segment->prot_flags);
-}
-#endif
 
 __attribute__((constructor)) static void segments_ctor() {
 	PAGE_SIZE = sysconf(_SC_PAGESIZE);
 	AES128_SetKey(AES_KEY);
 	init_segments();
 
-#ifndef DYNAMIC_DECRYPTION
-	decrypt_segment(&SEG_TEXT);
-#endif
-
-#ifdef DYNAMIC_DECRYPTION
-	// FIXME change access flags on encrypted text segment, this probably can be
-	// done in the static encryptor itself actually
-	mprotect(SEG_TEXT.start, SEG_TEXT.size, PROT_NONE);
-	// set all bits as encrypted
-	memset(SEG_TEXT.stat_bitset, ~0, BITNSLOTS(SEG_TEXT.size / 4096));
 	// setting up signal handler
 	static struct sigaction sa;
 	sa.sa_sigaction = decryptor;
@@ -223,7 +205,6 @@ __attribute__((constructor)) static void segments_ctor() {
 		perror("Signal Handler Installation Failed:");
 		exit(EXIT_FAILURE);
 	}
-#endif
 
 #ifdef DYNAMIC_ENCRYPTION
 	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
@@ -234,4 +215,6 @@ __attribute__((constructor)) static void segments_ctor() {
 #endif
 }
 
-__attribute__((destructor)) static void segments_dtor() {}
+__attribute__((destructor)) static void segments_dtor() {
+	fini_segment(&SEG_TEXT);
+}
