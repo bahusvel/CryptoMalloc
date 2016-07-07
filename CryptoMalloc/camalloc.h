@@ -19,6 +19,9 @@ void crypto_free(void *ptr);
 void *crypto_realloc(void *ptr, size_t size);
 void *crypto_calloc(size_t count, size_t size);
 
+void encrypt_addr(void *ptr, size_t size);
+void decrypt_addr(void *ptr, size_t size);
+
 // libc
 
 #define libc_malloc __libc_malloc
