@@ -3,7 +3,15 @@
 #include <string.h>
 #include <sys/mman.h>
 
+#if __x86_64__
+#define HIJACK_SIZE 12
+#define HIJACK_CODE "\x48\xa1\x00\x00\x00\x00\x00\x00\x00\x00\x50\xc3"
+#define HIJACK_OFFSET 2
+#else
 #define HIJACK_SIZE 6
+#define HIJACK_CODE "\x68\x00\x00\x00\x00\xc3"
+#define HIJACK_OFFSET 1
+#endif
 
 typedef struct sym_hook {
 	void *addr;
@@ -40,8 +48,12 @@ sym_hook hijack_start(void *target, void *new) {
 	hook.addr = target;
 
 	// NOTE push $addr; ret
-	memcpy(hook.n_code, "\x68\x00\x00\x00\x00\xc3", HIJACK_SIZE);
+	memcpy(hook.n_code, HIJACK_CODE, HIJACK_SIZE);
+#ifdef __x86_64__
+	*(unsigned long *)(&hook.n_code[2]) = (unsigned long)new;
+#else
 	*(unsigned int *)(&hook.n_code[1]) = (unsigned int)new;
+#endif
 
 	memcpy(hook.o_code, target, HIJACK_SIZE);
 
