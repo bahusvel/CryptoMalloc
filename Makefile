@@ -15,7 +15,7 @@ test:
 	$(CC) -std=c99 $(TESTSRC) -o test
 
 clean:
-	rm -f *.o *.so monitor test
+	rm -f *.o *.so monitor test malloc_hook
 
 aes.o: CryptoMalloc/aes.c
 	gcc $(CFLAGS) -c CryptoMalloc/aes.c
@@ -31,6 +31,10 @@ monitor:
 
 run_monitor: clean monitor
 	./monitor
+
+malloc_hook: clean
+	gcc Experiments/malloc_rewrite.c -o malloc_hook
+	./malloc_hook
 
 run:
 	./cmalloc.sh python3
