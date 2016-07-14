@@ -1,9 +1,17 @@
+#include "distorm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
 #define MAX_HIJACK_SIZE 16
+#ifdef __x86_64__
+#define DECODE_BITS Decode64Bits
+#else
+#define DECODE_BITS Decode32Bits
+#endif
+
+#define DECODE_MAX_INSTRUCTIONS 16
 
 typedef struct sym_hook {
 	void *addr;
@@ -36,10 +44,31 @@ void hijack_stop(sym_hook *hook) {
 	enable_wp(hook->addr);
 }
 
+static int hook_whole_size(void *target, int hook_code_size) {
+	_DecodedInst decodedInstructions[DECODE_MAX_INSTRUCTIONS];
+	unsigned int decodedCount = 0;
+	_DecodeResult result =
+		distorm_decode(0, target, 32, DECODE_BITS, decodedInstructions,
+					   DECODE_MAX_INSTRUCTIONS, &decodedCount);
+
+	if (result == DECRES_INPUTERR) {
+		printf("Input error\n");
+		exit(-1);
+	}
+	int whole_size = 0, i = 0;
+	while (whole_size < hook_code_size) {
+		if (i > decodedCount) {
+			printf("Didn't decode enough !!!\n");
+			exit(-1);
+		}
+		whole_size += decodedInstructions[i++].size;
+	}
+	return whole_size;
+}
+
 sym_hook hijack_start(void *target, void *new) {
 	sym_hook hook;
 	hook.addr = target;
-
 	// check if jump needs to be a long jump
 	if (labs(new - target) > 4 * 1024 * 1024) {
 		hook.hijack_size = 16;
@@ -64,13 +93,11 @@ sym_hook hijack_start(void *target, void *new) {
 	disable_wp(target);
 	memcpy(target, hook.n_code, hook.hijack_size);
 	enable_wp(target);
-
+	printf("Changed the code\n\n");
 	return hook;
 }
 
-/* TODO I don't actually care for this, but it can be very useful and much
-faster than pausing and resuming the hook, need to use an LDE64 in order to
-properly get the instructions needed
+/*
 void hijack_trampoline(sym_hook *hook, void *trampoline) {
 	disable_wp(trampoline);
 	memcpy(trampoline, hook->o_code, hook->hijack_size);
