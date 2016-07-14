@@ -3,19 +3,13 @@
 #include <string.h>
 #include <sys/mman.h>
 
-#if __x86_64__
-#define HIJACK_SIZE 16
-#define HIJACK_CODE                                                            \
-	"\x50\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x87\x04\x24\xC3"
-#else
-#define HIJACK_SIZE 6
-#define HIJACK_CODE "\x68\x00\x00\x00\x00\xc3"
-#endif
+#define MAX_HIJACK_SIZE 16
 
 typedef struct sym_hook {
 	void *addr;
-	unsigned char o_code[HIJACK_SIZE];
-	unsigned char n_code[HIJACK_SIZE];
+	int hijack_size;
+	unsigned char o_code[MAX_HIJACK_SIZE];
+	unsigned char n_code[MAX_HIJACK_SIZE];
 } sym_hook;
 
 sym_hook malloc_hook;
@@ -32,13 +26,13 @@ void enable_wp(void *target) {
 
 void hijack_resume(sym_hook *hook) {
 	disable_wp(hook->addr);
-	memcpy(hook->addr, hook->n_code, HIJACK_SIZE);
+	memcpy(hook->addr, hook->n_code, hook->hijack_size);
 	enable_wp(hook->addr);
 }
 
 void hijack_stop(sym_hook *hook) {
 	disable_wp(hook->addr);
-	memcpy(hook->addr, hook->o_code, HIJACK_SIZE);
+	memcpy(hook->addr, hook->o_code, hook->hijack_size);
 	enable_wp(hook->addr);
 }
 
@@ -46,22 +40,29 @@ sym_hook hijack_start(void *target, void *new) {
 	sym_hook hook;
 	hook.addr = target;
 
-	// NOTE push $addr; ret
-	memcpy(hook.n_code, HIJACK_CODE, HIJACK_SIZE);
-
-	// TODO use this to check if jump is too long and use the according method
-	if (abs(new - target) > 2 * 1024 * 1024) {
+	// check if jump needs to be a long jump
+	if (labs(new - target) > 4 * 1024 * 1024) {
+		hook.hijack_size = 16;
+		/* NOTE
+		push rax;
+		movabs rax, $addr;
+		xchg rax, [rsp];
+		ret;
+		*/
+		memcpy(
+			hook.n_code,
+			"\x50\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x87\x04\x24\xC3",
+			16);
+		*(unsigned long *)(&hook.n_code[3]) = (unsigned long)new;
+	} else {
+		hook.hijack_size = 6;
+		// NOTE push $addr; ret
+		memcpy(hook.n_code, "\x68\x00\x00\x00\x00\xc3", 6);
+		*(unsigned int *)(&hook.n_code[1]) = (unsigned int)new;
 	}
-
-#ifdef __x86_64__
-	*(unsigned long *)(&hook.n_code[3]) = (unsigned long)new;
-#else
-	*(unsigned int *)(&hook.n_code[1]) = (unsigned int)new;
-#endif
-
-	memcpy(hook.o_code, target, HIJACK_SIZE);
+	memcpy(hook.o_code, target, hook.hijack_size);
 	disable_wp(target);
-	memcpy(target, hook.n_code, HIJACK_SIZE);
+	memcpy(target, hook.n_code, hook.hijack_size);
 	enable_wp(target);
 
 	return hook;
