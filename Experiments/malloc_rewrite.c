@@ -4,13 +4,12 @@
 #include <sys/mman.h>
 
 #if __x86_64__
-#define HIJACK_SIZE 12
-#define HIJACK_CODE "\x48\xa1\x00\x00\x00\x00\x00\x00\x00\x00\x50\xc3"
-#define HIJACK_OFFSET 2
+#define HIJACK_SIZE 16
+#define HIJACK_CODE                                                            \
+	"\x50\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x87\x04\x24\xC3"
 #else
 #define HIJACK_SIZE 6
 #define HIJACK_CODE "\x68\x00\x00\x00\x00\xc3"
-#define HIJACK_OFFSET 1
 #endif
 
 typedef struct sym_hook {
@@ -49,14 +48,14 @@ sym_hook hijack_start(void *target, void *new) {
 
 	// NOTE push $addr; ret
 	memcpy(hook.n_code, HIJACK_CODE, HIJACK_SIZE);
+
 #ifdef __x86_64__
-	*(unsigned long *)(&hook.n_code[2]) = (unsigned long)new;
+	*(unsigned long *)(&hook.n_code[3]) = (unsigned long)new;
 #else
 	*(unsigned int *)(&hook.n_code[1]) = (unsigned int)new;
 #endif
 
 	memcpy(hook.o_code, target, HIJACK_SIZE);
-
 	disable_wp(target);
 	memcpy(target, hook.n_code, HIJACK_SIZE);
 	enable_wp(target);
