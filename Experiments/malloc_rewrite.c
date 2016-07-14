@@ -49,6 +49,10 @@ sym_hook hijack_start(void *target, void *new) {
 	// NOTE push $addr; ret
 	memcpy(hook.n_code, HIJACK_CODE, HIJACK_SIZE);
 
+	// TODO use this to check if jump is too long and use the according method
+	if (abs(new - target) > 2 * 1024 * 1024) {
+	}
+
 #ifdef __x86_64__
 	*(unsigned long *)(&hook.n_code[3]) = (unsigned long)new;
 #else
