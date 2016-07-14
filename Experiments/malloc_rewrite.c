@@ -68,6 +68,17 @@ sym_hook hijack_start(void *target, void *new) {
 	return hook;
 }
 
+/* TODO I don't actually care for this, but it can be very useful and much
+faster than pausing and resuming the hook, need to use an LDE64 in order to
+properly get the instructions needed
+void hijack_trampoline(sym_hook *hook, void *trampoline) {
+	disable_wp(trampoline);
+	memcpy(trampoline, hook->o_code, hook->hijack_size);
+	memcpy(void *, const void *, size_t);
+	enable_wp(trampoline);
+}
+*/
+
 void *fake_malloc(size_t size) {
 	printf("In the fake malloc\n");
 	hijack_stop(&malloc_hook); // this can be replaced by a trampoline instead
