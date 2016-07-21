@@ -38,6 +38,5 @@ LD_PRELOAD=cryptomalloc.so [application]
 CryptoMalloc also provides a shell script that will do this for you! (cmalloc.sh)
 
 # Issues:
-* Kernel doesnt trigger sigsegv on memory passed to it via syscall, so it will see the encrypted memory (fix is not very easy, requires to intercept syscalls, alternatively use crypto aware api)
-* The memory management data-structure is not efficient (use rb-tree from linux kernel)
+* Kernel doesnt trigger sigsegv on memory passed to it via syscall, so it will see the encrypted memory, if you need system deterministic system calls use camalloc.h
 * allocator needs improvements as it currently badly suffers from fragmentation, I can use other malloc() implementation (however I'm lazy)
