@@ -52,15 +52,24 @@ void hijack_stop(sym_hook *hook) {
 	enable_wp(hook->addr);
 }
 
-static int hook_whole_size(void *target, int hook_code_size) {
-	_DecodedInst decodedInstructions[DECODE_MAX_INSTRUCTIONS];
+static unsigned int dissasm(void *ptr, _DecodedInst *instructions,
+							int max_bytes, int max_instructions) {
 	unsigned int decodedCount = 0;
-	_DecodeResult result = distorm_decode(
-		0, target, MAX_OCODE_SIZE, DECODE_BITS, decodedInstructions,
-		DECODE_MAX_INSTRUCTIONS, &decodedCount);
-
+	_DecodeResult result =
+		distorm_decode(0, ptr, max_bytes, DECODE_BITS, instructions,
+					   max_instructions, &decodedCount);
 	if (result == DECRES_INPUTERR) {
 		printf("Input error\n");
+		return 0;
+	}
+	return decodedCount;
+}
+
+static int hook_whole_size(void *target, int hook_code_size) {
+	_DecodedInst decodedInstructions[DECODE_MAX_INSTRUCTIONS];
+	unsigned int decodedCount = dissasm(
+		target, decodedInstructions, MAX_OCODE_SIZE, DECODE_MAX_INSTRUCTIONS);
+	if (decodedCount == 0) {
 		exit(-1);
 	}
 	int whole_size = 0, i = 0;
@@ -69,24 +78,26 @@ static int hook_whole_size(void *target, int hook_code_size) {
 			printf("Didn't decode enough !!!\n");
 			exit(-1);
 		}
+		if (strcmp((char *)decodedInstructions[i].mnemonic.p, "JMP") == 0) {
+			// cannot provide trampoline if the original functionc
+			// unconditionally jumps
+			printf("Original code contains JMP instruction\n");
+			return -1;
+		}
 		whole_size += decodedInstructions[i++].size;
 	}
 	return whole_size;
 }
 
-static void diassassemble(void *target, int bytes) {
+static void print_assembly(void *target, int bytes) {
 	_DecodedInst decodedInstructions[DECODE_MAX_INSTRUCTIONS];
-	unsigned int decodedCount = 0;
-	_DecodeResult result =
-		distorm_decode(0, target, bytes, DECODE_BITS, decodedInstructions,
-					   DECODE_MAX_INSTRUCTIONS, &decodedCount);
-
-	if (result == DECRES_INPUTERR) {
-		printf("Input error\n");
-		exit(-1);
+	unsigned int decodedCount =
+		dissasm(target, decodedInstructions, bytes, DECODE_MAX_INSTRUCTIONS);
+	if (decodedCount == 0) {
+		return;
 	}
-	int i = 0;
-	for (; i < decodedCount; i++) {
+
+	for (unsigned int i = 0; i < decodedCount; i++) {
 		_DecodedInst inst = decodedInstructions[i];
 		printf("%s %s -> %s(%d)\n", inst.mnemonic.p, inst.operands.p,
 			   inst.instructionHex.p, inst.size);
@@ -122,15 +133,19 @@ sym_hook hijack_start(void *target, void *new) {
 	return hook;
 }
 
-void hijack_make_trampoline(sym_hook *hook, void *trampoline) {
+int hijack_make_trampoline(sym_hook *hook, void *trampoline) {
+	print_assembly(hook->o_code, 32);
 	int whole_size = hook_whole_size(hook->o_code, hook->hijack_size);
-	diassassemble(hook->o_code, 32);
+	if (whole_size == -1) {
+		return -1;
+	}
 	printf("Whole size is %d\n", whole_size);
 	disable_wp(trampoline);
 	memcpy(trampoline, hook->o_code, whole_size);
 	enable_wp(trampoline);
 	(void)hijack_start(trampoline + whole_size, hook->addr + whole_size);
-	diassassemble(trampoline, 32);
+	print_assembly(trampoline, 32);
+	return 0;
 }
 
 void *malloc_trampoline(size_t size) { TRAMPOLINE_CONTENTS }
@@ -150,6 +165,8 @@ int main() {
 	printf("Location of malloc is %p\n", malloc);
 	printf("Location of fake malloc is %p\n", fake_malloc);
 	malloc_hook = hijack_start(malloc, fake_malloc);
-	hijack_make_trampoline(&malloc_hook, malloc_trampoline);
+	if (hijack_make_trampoline(&malloc_hook, malloc_trampoline)) {
+		exit(-1);
+	}
 	printf("Malloc said %p\n", malloc(0));
 }
