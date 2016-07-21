@@ -14,6 +14,16 @@ all: clean cryptomalloc test
 test:
 	$(CC) -std=c99 $(TESTSRC) -o test
 
+profile: cryptomalloc
+	cp CryptoMalloc.so libCryptoMalloc.so
+	gcc -L./ -g CryptoMallocTest/main.c -o linked_test -lCryptoMalloc
+	export LD_PROFILE=libCryptoMalloc.so
+	export LD_PROFILE_OUTPUT=$(pwd)/prof_data
+	mkdir -p $LD_PROFILE_OUTPUT
+	rm -f $LD_PROFILE_OUTPUT/$LD_PROFILE.profile
+	LD_LIBRARY_PATH=. ./linked_test
+	sprof -q libCryptoMalloc.so $LD_PROFILE_OUTPUT/libCryptoMalloc.so.profile
+
 clean:
 	rm -f *.o *.so
 
