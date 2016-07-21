@@ -57,33 +57,6 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
-int camalloc_decrypt(void *address) {
-	if (address == NULL)
-		return -1;
-	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
-	for (np = mem_map.first; np != NULL; np = np->next) {
-		if (np->key <= address && address <= (np->key + np->alloc_size)) {
-			if ((np->flags & CRYPTO_CLEAR) == 0) {
-				goto decrypt;
-			}
-			return -1;
-		}
-	}
-	pthread_mutex_unlock(&mymutex);
-	return -1;
-decrypt:
-	// printf("Decrypting your ram\n");
-	for (size_t i = 0; i < np->alloc_size; i += 16) {
-		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
-	}
-	// printf("Decrypted!\n");
-	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
-	np->flags |= CRYPTO_CLEAR;
-	pthread_mutex_unlock(&mymutex);
-	return 0;
-}
-
 int camalloc_encrypt(void *address) {
 	if (address == NULL)
 		return -1;
@@ -110,9 +83,39 @@ encrypt:
 	return 0;
 }
 
+int camalloc_decrypt(void *address) {
+	if (address == NULL)
+		return -1;
+	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
+	for (np = mem_map.first; np != NULL; np = np->next) {
+		if (np->key <= address && address <= (np->key + np->alloc_size)) {
+			/* if uncomment it CRAWLS !!!!
+			if (np->flags & CRYPTO_CLEAR) {
+				pthread_mutex_unlock(&mymutex);
+				return 0;
+			}
+			*/
+			goto decrypt;
+		}
+	}
+	pthread_mutex_unlock(&mymutex);
+	return -1;
+decrypt:
+	// printf("Decrypting your ram\n");
+	for (size_t i = 0; i < np->alloc_size; i += 16) {
+		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
+	}
+	// printf("Decrypted!\n");
+	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
+	np->flags |= CRYPTO_CLEAR;
+	pthread_mutex_unlock(&mymutex);
+	return 0;
+}
+
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
-	if (camalloc_decrypt(address) == 0) {
+	if (camalloc_decrypt(address)) {
 		// if stdin and stdout buffers are encrypted this might be bad...
 		printf("Real Seg Fault Happened :(\n");
 		old_handler.sa_sigaction(signum, info, context);
@@ -209,7 +212,7 @@ void *malloc(size_t size) {
 	pthread_mutex_lock(&mymutex);
 
 	// try to reuse, freed memory
-	if (fit_node = cor_map_find_fit(&free_map, size)) {
+	if ((fit_node = cor_map_find_fit(&free_map, size)) != NULL) {
 		cor_map_delete(&free_map, fit_node->key);
 		fit_node->flags = CRYPTO_CLEAR;
 		cor_map_set(&mem_map, fit_node);

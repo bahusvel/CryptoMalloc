@@ -1,4 +1,4 @@
-.PHONY: clean
+ .PHONY: clean
 
 CC = gcc
 CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
