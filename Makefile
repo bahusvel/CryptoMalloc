@@ -28,10 +28,7 @@ segment_test:
 	gcc -std=c99 -I./CryptoSegments/ CryptoMallocTest/segment_test.c -o segment_test
 	./segment_test
 
-rb_tree.o:
-	gcc -c CryptoMalloc/rbtree.c -o rbtree.o
-
-profile_rbtree: #rb_tree.o
+profile_list:
 	gcc -ICryptoMalloc/ -c -O2 CryptoMallocTest/rb_test.c -o rb_test.o
 	gcc rb_test.o -o rb_test
 	./rb_test
