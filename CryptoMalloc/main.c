@@ -44,7 +44,7 @@ static int PAGE_SIZE;
 static cor_map mem_map = {NULL};
 static cor_map free_map = {NULL};
 static int fd = -1;
-static off64_t crypto_mem_break = 0;
+static off_t crypto_mem_break = 0;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
@@ -52,9 +52,6 @@ static pthread_t encryptor_thread;
 //#define ENCRYPT_STDIO 1
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
-
-// this is done because on Linux pthreads overrides malloc, and it cannot be
-// fetched using dlsym
 
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
@@ -170,14 +167,14 @@ __attribute__((destructor)) static void crypto_malloc_dtor() {
 void *malloc(size_t size) {
 	if (size == 0)
 		return NULL;
-	// TODO: may need to check if the right segfault handler is set
+	// TODO:0 may need to check if the right segfault handler is set
 	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
 	cor_map_node *fit_node = NULL;
 
 	pthread_mutex_lock(&mymutex);
 
 	// try to reuse, freed memory
-	if (fit_node = cor_map_find_fit(&free_map, size)) {
+	if ((fit_node = cor_map_find_fit(&free_map, size)) != NULL) {
 		cor_map_delete(&free_map, fit_node->key);
 		fit_node->flags = CRYPTO_CLEAR;
 		cor_map_set(&mem_map, fit_node);
@@ -187,7 +184,7 @@ void *malloc(size_t size) {
 	off_t foffset = crypto_mem_break;
 	crypto_mem_break += size;
 
-	if (ftruncate64(fd, crypto_mem_break) < 0) {
+	if (ftruncate(fd, crypto_mem_break) < 0) {
 		perror("ftruncate");
 		goto failure;
 	}
@@ -241,7 +238,7 @@ void free(void *ptr) {
 	pthread_mutex_unlock(&mymutex);
 }
 
-// TODO: Use a more sophisticated realloc, for better performance
+// FIXME:10 Use a more sophisticated realloc, for better performance
 void *realloc(void *ptr, size_t size) {
 	if (ptr == NULL)
 		return malloc(size);

@@ -4,27 +4,42 @@ CC = gcc
 CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
 LDFLAGS = -shared -ldl
 
-SRC = CryptoMalloc/*.c
-TESTSRC = CryptoMallocTest/main.c
-OBJ = $(SRC:.c=.o)
-
 
 all: clean cryptomalloc test
 
 test:
-	$(CC) -std=c99 $(TESTSRC) -o test
+	gcc -std=c99 CryptoMallocTest/main.c -o test
 
 clean:
-	rm -f *.o *.so
+	rm -f *.o *.so segments binencrypt monitor core segment_test test
 
-aes.o: CryptoMalloc/aes.c
-	gcc $(CFLAGS) -c CryptoMalloc/aes.c
+aes.o:
+	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/aes.c
 
-main.o: CryptoMalloc/main.c
+libsegments: aes.o
+	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c -I./CryptoMalloc/ CryptoSegments/segments.c
+	gcc $(LDFLAGS) -o CryptoSegments.so segments.o aes.o -lrt -lpthread -lelf
+
+cryptomalloc: aes.o
 	gcc $(CFLAGS) -c CryptoMalloc/main.c
-
-cryptomalloc: main.o aes.o
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
+
+segment_test:
+	gcc -std=c99 -I./CryptoSegments/ CryptoMallocTest/segment_test.c -o segment_test
+	./segment_test
+
+segments_run: clean libsegments test
+	LD_PRELOAD=./CryptoSegments.so python2
+
+dynamic_encryption: clean libsegments binencrypt
+	rm -f ./python3
+	cp /usr/bin/python3.5 ./python3
+	./binencrypt encrypt ./python3
+	LD_PRELOAD=./CryptoSegments.so ./python3
+
+binencrypt: aes.o
+	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoSegments/main.c -o binencrypt.o
+	gcc -o binencrypt binencrypt.o aes.o -lelf
 
 run:
 	./cmalloc.sh python3

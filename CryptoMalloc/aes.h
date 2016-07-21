@@ -2,6 +2,8 @@
 #define _AES_H_
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // #define the macros below to 1/0 to enable/disable the mode of operation.
 //
@@ -27,6 +29,27 @@ void AES128_ECB_encrypt(uint8_t *input, const uint8_t *key, uint8_t *output);
 void AES128_ECB_decrypt(uint8_t *input, const uint8_t *key, uint8_t *output);
 void AES128_ECB_encrypt_inplace(uint8_t *input);
 void AES128_ECB_decrypt_inplace(uint8_t *input);
+
+inline int AES128_ECB_encrypt_buffer(void *buffer, size_t size) {
+	if ((size % 16) != 0) {
+		printf("Buffer size not multiple of 16: %lu\n", size);
+		return -1;
+	}
+	for (size_t i = 0; i < size; i += 16) {
+		AES128_ECB_encrypt_inplace(buffer + i);
+	}
+	return 0;
+}
+inline int AES128_ECB_decrypt_buffer(void *buffer, size_t size) {
+	if ((size % 16) != 0) {
+		printf("Buffer size not multiple of 16: %lu\n", size);
+		return -1;
+	}
+	for (size_t i = 0; i < size; i += 16) {
+		AES128_ECB_decrypt_inplace(buffer + i);
+	}
+	return 0;
+}
 
 #endif // #if defined(ECB) && ECB
 
