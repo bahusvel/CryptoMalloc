@@ -63,23 +63,20 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 		goto segfault;
 	cor_map_node *np;
 	pthread_mutex_lock(&mymutex);
-	for (np = mem_map.first; np != NULL; np = np->next) {
-		if (np->key <= address && address <= (np->key + np->alloc_size)) {
-			goto decrypt;
+	if ((np = cor_map_range(&mem_map, address)) != NULL) {
+		// printf("Decrypting your ram\n");
+		for (size_t i = 0; i < np->alloc_size; i += 16) {
+			AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
 		}
+		// printf("Decrypted!\n");
+		mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
+		np->flags |= CRYPTO_CLEAR;
+		pthread_mutex_unlock(&mymutex);
+		return;
+	} else {
+		pthread_mutex_unlock(&mymutex);
+		goto segfault;
 	}
-	pthread_mutex_unlock(&mymutex);
-	goto segfault;
-decrypt:
-	// printf("Decrypting your ram\n");
-	for (size_t i = 0; i < np->alloc_size; i += 16) {
-		AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
-	}
-	// printf("Decrypted!\n");
-	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
-	np->flags |= CRYPTO_CLEAR;
-	pthread_mutex_unlock(&mymutex);
-	return;
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
 	printf("Real Seg Fault Happened :(\n");
@@ -94,11 +91,11 @@ static void *encryptor(void *ptr) {
 	// this will block sigsegv on this thread, so ensure code from here on is
 	// correct
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
-
+	cor_map *map = &mem_map;
+	cor_map_node *np;
 	while (1) {
-		cor_map_node *np;
 		pthread_mutex_lock(&mymutex);
-		for (np = mem_map.first; np != NULL; np = np->next) {
+		COR_MAP_FOREACH(map, np) {
 			if (np->flags & CRYPTO_CLEAR) {
 				mprotect(np->key, np->alloc_size, PROT_NONE);
 				for (size_t i = 0; i < np->alloc_size; i += 16) {
