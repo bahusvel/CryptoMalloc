@@ -53,26 +53,25 @@ static pthread_t encryptor_thread;
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
-// this is done because on Linux pthreads overrides malloc, and it cannot be
-// fetched using dlsym
-
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
-static void decryptor(int signum, siginfo_t *info, void *context) {
-	void *address = info->si_addr;
+int camalloc_decrypt(void *address) {
 	if (address == NULL)
-		goto segfault;
+		return -1;
 	cor_map_node *np;
 	pthread_mutex_lock(&mymutex);
 	for (np = mem_map.first; np != NULL; np = np->next) {
 		if (np->key <= address && address <= (np->key + np->alloc_size)) {
-			goto decrypt;
+			if ((np->flags & CRYPTO_CLEAR) == 0) {
+				goto decrypt;
+			}
+			return -1;
 		}
 	}
 	pthread_mutex_unlock(&mymutex);
-	goto segfault;
+	return -1;
 decrypt:
 	// printf("Decrypting your ram\n");
 	for (size_t i = 0; i < np->alloc_size; i += 16) {
@@ -82,12 +81,43 @@ decrypt:
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
 	np->flags |= CRYPTO_CLEAR;
 	pthread_mutex_unlock(&mymutex);
-	return;
-segfault:
-	// if stdin and stdout buffers are encrypted this might be bad...
-	printf("Real Seg Fault Happened :(\n");
-	old_handler.sa_sigaction(signum, info, context);
-	return;
+	return 0;
+}
+
+int camalloc_encrypt(void *address) {
+	if (address == NULL)
+		return -1;
+	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
+	for (np = mem_map.first; np != NULL; np = np->next) {
+		if (np->key <= address && address <= (np->key + np->alloc_size)) {
+			if (np->flags & CRYPTO_CLEAR) {
+				goto encrypt;
+			}
+			return -1;
+		}
+	}
+	pthread_mutex_unlock(&mymutex);
+	return -1;
+encrypt:
+	mprotect(np->key, np->alloc_size, PROT_NONE);
+	for (size_t i = 0; i < np->alloc_size; i += 16) {
+		AES128_ECB_encrypt_inplace(np->cryptoaddr + i);
+	}
+	// printf("Encrypted!\n");
+	np->flags &= ~CRYPTO_CLEAR;
+	pthread_mutex_unlock(&mymutex);
+	return 0;
+}
+
+static void decryptor(int signum, siginfo_t *info, void *context) {
+	void *address = info->si_addr;
+	if (camalloc_decrypt(address) == 0) {
+		// if stdin and stdout buffers are encrypted this might be bad...
+		printf("Real Seg Fault Happened :(\n");
+		old_handler.sa_sigaction(signum, info, context);
+		return;
+	}
 }
 
 static void *encryptor(void *ptr) {

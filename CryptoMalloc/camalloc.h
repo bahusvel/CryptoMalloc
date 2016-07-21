@@ -14,13 +14,13 @@ extern void *__libc_realloc(void *ptr, size_t size);
 extern void *__libc_calloc(size_t count, size_t size);
 #endif
 
-void *crypto_malloc(size_t size);
-void crypto_free(void *ptr);
-void *crypto_realloc(void *ptr, size_t size);
-void *crypto_calloc(size_t count, size_t size);
+#define crypto_malloc malloc
+#define crypto_free free
+#define crypto_realloc realloc
+#define crypto_calloc calloc
 
-void encrypt_addr(void *ptr, size_t size);
-void decrypt_addr(void *ptr, size_t size);
+int camalloc_decrypt(void *address);
+int camalloc_encrypt(void *address);
 
 // libc
 
