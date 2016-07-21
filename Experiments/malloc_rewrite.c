@@ -1,4 +1,9 @@
+#define _GNU_SOURCE
+
 #include "distorm.h"
+#include <dlfcn.h>
+#include <elf.h>
+#include <link.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,12 +36,12 @@ typedef struct sym_hook {
 
 sym_hook malloc_hook;
 
-void disable_wp(void *target) {
+static void disable_wp(void *target) {
 	// FIXME this is troublesome if .text is less than 2 pages
 	mprotect((unsigned long)target & ~0xFFF, 8192,
 			 PROT_WRITE | PROT_READ | PROT_EXEC);
 }
-void enable_wp(void *target) {
+static void enable_wp(void *target) {
 	mprotect((unsigned long)target & ~0xFFF, 8192, PROT_EXEC | PROT_READ);
 }
 
@@ -50,6 +55,16 @@ void hijack_stop(sym_hook *hook) {
 	disable_wp(hook->addr);
 	memcpy(hook->addr, hook->o_code, hook->hijack_size);
 	enable_wp(hook->addr);
+}
+
+static size_t symbol_size(void *ptr) {
+	void *symbol_entry;
+	Dl_info info;
+	if (dladdr1(ptr, &info, &symbol_entry, RTLD_DL_SYMENT) == 0) {
+		printf("Dladdr failed\n");
+		return 0;
+	}
+	return ((Elf64_Sym *)symbol_entry)->st_size;
 }
 
 static unsigned int dissasm(void *ptr, _DecodedInst *instructions,
@@ -148,9 +163,9 @@ int hijack_make_trampoline(sym_hook *hook, void *trampoline) {
 	return 0;
 }
 
-void *malloc_trampoline(size_t size) { TRAMPOLINE_CONTENTS }
+static void *malloc_trampoline(size_t size) { TRAMPOLINE_CONTENTS }
 
-void *fake_malloc(size_t size) {
+static void *fake_malloc(size_t size) {
 	printf("In the fake malloc\n");
 	/*
 	hijack_stop(&malloc_hook); // this can be replaced by a trampoline instead

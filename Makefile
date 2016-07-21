@@ -33,7 +33,7 @@ run_monitor: clean monitor
 	./monitor
 
 malloc_hook: clean
-	gcc -I distorm/include Experiments/malloc_rewrite.c -o malloc_rewrite -ldistorm3
+	gcc -I distorm/include Experiments/malloc_rewrite.c -o malloc_rewrite -ldistorm3 -ldl
 	./malloc_rewrite
 
 run:
