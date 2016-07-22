@@ -123,7 +123,7 @@ sym_hook hijack_start(void *target, void *new) {
 	sym_hook hook;
 	hook.addr = target;
 	// check if jump needs to be a long jump
-	if (labs(new - target) > 4 * 1024 * 1024) {
+	if (new > (unsigned long long)4 * 1024 * 1024) {
 		hook.hijack_size = 16;
 		/* NOTE
 		push rax;
