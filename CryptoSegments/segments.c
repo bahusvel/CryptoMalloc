@@ -165,10 +165,11 @@ static void fini_segment(vm_segment *segment) {
 }
 
 static void init_segment(const char *name, Elf *elf_file, vm_segment *segment) {
-	Elf_Scn *text_section = get_section(elf_file, name);
-	EncryptionOffsets offsets = get_offsets(text_section);
-	segment->start = offsets.start_address + offsets.start;
-	segment->end = offsets.start_address + offsets.end;
+	CipherSection section = {.section_name = name};
+	get_section(elf_file, &section);
+	calculate_offsets(&section);
+	segment->start = section.start_address + section.start;
+	segment->end = section.start_address + section.end;
 	segment->size = segment->end - segment->start;
 	segment->stat_bitset = malloc(BITNSLOTS(segment->size / 4096));
 	remap_segment(segment);

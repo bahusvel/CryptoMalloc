@@ -3,6 +3,8 @@
 CC = gcc
 CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
 LDFLAGS = -shared -ldl
+TEST_PROGRAM = /usr/bin/python3
+TEST_PROG_NAME = python3
 
 
 all: clean cryptomalloc test
@@ -37,10 +39,10 @@ segments_run: clean libsegments test
 	LD_PRELOAD=./CryptoSegments.so python2
 
 dynamic_encryption: clean libsegments binencrypt
-	rm -f ./python3
-	cp /usr/bin/python3.5 ./python3
-	./binencrypt encrypt ./python3
-	LD_PRELOAD=./CryptoSegments.so ./python3
+	rm -f ./$(TEST_PROG_NAME)
+	cp $(TEST_PROGRAM) ./$(TEST_PROG_NAME)
+	./binencrypt encrypt ./$(TEST_PROG_NAME)
+	LD_PRELOAD=./CryptoSegments.so ./$(TEST_PROG_NAME)
 
 binencrypt: aes.o
 	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoSegments/main.c -o binencrypt.o

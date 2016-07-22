@@ -11,9 +11,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#define HE_READ_ONLY 0
-#define HE_READ_WRITE 1
-
 Elf *load_and_check(char *filepath, int *fd, int write) {
 	int open_mode = write ? O_RDWR : O_RDONLY;
 	int elf_mode = write ? ELF_C_RDWR : ELF_C_READ;
@@ -113,13 +110,17 @@ void print_section_header(Elf *elf_file) {
 	}
 }
 
-typedef struct EncryptionOffsets {
+typedef struct CipherSection {
 	void *start_address;
+	const char *section_name;
 	off_t start;
 	off_t end;
-} EncryptionOffsets;
+	Elf_Scn *section;
+	GElf_Shdr shdr;
+	void *dataBuffer;
+} CipherSection;
 
-Elf_Scn *get_section(Elf *elf_file, const char *section_name) {
+int get_section(Elf *elf_file, CipherSection *section) {
 	size_t shstrndx;
 	if (elf_getshdrstrndx(elf_file, &shstrndx) != 0) {
 		errx(EX_SOFTWARE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
@@ -132,45 +133,69 @@ Elf_Scn *get_section(Elf *elf_file, const char *section_name) {
 			errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
 		if ((name = elf_strptr(elf_file, shstrndx, shdr.sh_name)) == NULL)
 			errx(EX_SOFTWARE, "elf_strptr() failed: %s.", elf_errmsg(-1));
-		if (strcmp(name, section_name) == 0) {
-			return scn;
+		if (strcmp(name, section->section_name) == 0) {
+			section->section = scn;
+			section->shdr = shdr;
+			return 0;
 		}
 	}
-	return NULL;
+	return -1;
 }
 
-EncryptionOffsets get_offsets(Elf_Scn *section) {
-	GElf_Shdr shdr;
-	if (gelf_getshdr(section, &shdr) != &shdr)
-		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
-	EncryptionOffsets offsets;
-	offsets.start_address = (void *)shdr.sh_addr;
-	offsets.start = ((shdr.sh_addr + 4095) & ~4095) - shdr.sh_addr;
-	off_t end_addr = shdr.sh_addr + shdr.sh_size;
-	offsets.end = (end_addr & ~4095) - shdr.sh_addr;
-	return offsets;
+int calculate_offsets(CipherSection *section) {
+	section->start_address = (void *)section->shdr.sh_addr;
+	section->start =
+		((section->shdr.sh_addr + 4095) & ~4095) - section->shdr.sh_addr;
+	off_t end_addr = section->shdr.sh_addr + section->shdr.sh_size;
+	section->end = (end_addr & ~4095) - section->shdr.sh_addr;
+	return 0;
 }
 
-Elf_Data *read_section_data(Elf_Scn *section) {
-	GElf_Shdr shdr;
-	if (gelf_getshdr(section, &shdr) != &shdr)
-		errx(EX_SOFTWARE, "getshdr() failed: %s.", elf_errmsg(-1));
+int read_section_data(CipherSection *section) {
 	Elf_Data *data = NULL;
-	// FIXME:0 apparently there can be more than one data descriptor per segment
-	if ((data = elf_getdata(section, data)) != NULL) {
-		return data;
+	if (section->dataBuffer != NULL) {
+		free(section->dataBuffer);
 	}
-	return NULL;
+	section->dataBuffer = malloc(section->shdr.sh_size);
+	if (section->dataBuffer <= 0) {
+		perror("Malloc failed");
+	}
+	off_t offset = 0;
+	while ((data = elf_getdata(section->section, data)) != NULL) {
+		memcpy(section->dataBuffer + offset, data->d_buf, data->d_size);
+		offset += data->d_size;
+	}
+	if (section->shdr.sh_size != offset) {
+		printf("Section read is incomplete\n");
+	}
+	return offset;
 }
 
-void dump_section(Elf_Scn *section, char *path) {
-	Elf_Data *data = read_section_data(section);
+int write_section_data(CipherSection *section, int free_databuf) {
+	Elf_Data *data = NULL;
+	off_t offset = 0;
+	while ((data = elf_getdata(section->section, data)) != NULL) {
+		memcpy(data->d_buf, section->dataBuffer + offset, data->d_size);
+		elf_flagdata(data, ELF_C_SET, ELF_F_DIRTY);
+		offset += data->d_size;
+	}
+	if (section->shdr.sh_size != offset) {
+		printf("Section write is incomplete\n");
+	}
+	if (free_databuf) {
+		free(section->dataBuffer);
+	}
+	return offset;
+}
+
+void dump_section(CipherSection *section, char *path) {
+	read_section_data(section);
 	int fd = 0;
 	if ((fd = open(path, O_WRONLY | O_CREAT, 0777)) < 0) {
 		perror("Cannot open dump file");
 		exit(-1);
 	}
-	if ((write(fd, data->d_buf, data->d_size)) <= 0) {
+	if ((write(fd, section->dataBuffer, section->shdr.sh_size)) <= 0) {
 		perror("Could not write to file");
 		exit(-1);
 	}
