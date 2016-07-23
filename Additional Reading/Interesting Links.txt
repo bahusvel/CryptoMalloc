@@ -4,3 +4,5 @@ http://frozencache.blogspot.co.nz
 http://www.zdnet.com/article/cryogenically-frozen-ram-bypasses-all-disk-encryption-methods/
 
 http://phrack.org/issues/63/13.html
+
+http://phrack.org/issues/58/5.html#article
