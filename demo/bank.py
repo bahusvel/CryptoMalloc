@@ -1,12 +1,8 @@
-from simplecrypt import decrypt
-details = open("details.enc", mode='rb')
-plaintext = str(decrypt('password', details.read()))
-entries = plaintext.split("\\n")
+details = open("merged.csv", mode='r')
 account_map = {}
-for entry in entries:
-	parts = entry.strip("\\r").split(",")
+for entry in details.readlines():
+	parts = entry.strip("\r").split(",")
 	account_map[parts[0]] = parts[1]
-print(account_map)
 while True:
 	email = input("Please enter email:")
 	if email in account_map:

@@ -52,7 +52,7 @@ static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
 // comment this out to not encrypt STDIO
-//#define ENCRYPT_STDIO 1
+#define ENCRYPT_STDIO 1
 
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 

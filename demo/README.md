@@ -1,3 +1,9 @@
+## Full command
+```sudo python3 pdump.py 12256 | strings | grep -E -o '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b' > emails.txt```
+
+### Bank app
+Needs ```pip3 install simple-crypt```
+
 ### Extract RW Memory
 ```
 # sudo is neccessary to access other process pid
