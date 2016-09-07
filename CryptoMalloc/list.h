@@ -5,6 +5,7 @@ typedef struct cor_map_node {
 	void *key;
 	void *cryptoaddr;
 	size_t alloc_size;
+	size_t crypto_size;
 	unsigned char flags;
 	struct cor_map_node *next;
 } cor_map_node;

@@ -31,6 +31,9 @@
 #define PATH_MAX 4096
 #endif
 
+#define ALIGN_UP(val, n) (val + (n - 1)) & ~(n - 1)
+#define ALIGN_DOWN(val, n) val & ~(n - 1)
+
 #ifdef __APPLE__
 static void *(*__libc_malloc)(size_t size);
 static void *(*__libc_free)(void *ptr);
@@ -65,9 +68,7 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL) {
 		// printf("Decrypting your ram\n");
-		for (size_t i = 0; i < np->alloc_size; i += 16) {
-			AES128_ECB_decrypt_inplace(np->cryptoaddr + i);
-		}
+		AES128_ECB_decrypt_buffer(np->cryptoaddr, np->crypto_size);
 		// printf("Decrypted!\n");
 		mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
 		np->flags |= CRYPTO_CLEAR;
@@ -98,9 +99,7 @@ static void *encryptor(void *ptr) {
 		COR_MAP_FOREACH(map, np) {
 			if (np->flags & CRYPTO_CLEAR) {
 				mprotect(np->key, np->alloc_size, PROT_NONE);
-				for (size_t i = 0; i < np->alloc_size; i += 16) {
-					AES128_ECB_encrypt_inplace(np->cryptoaddr + i);
-				}
+				AES128_ECB_encrypt_buffer(np->cryptoaddr, np->crypto_size);
 				// printf("Encrypted!\n");
 				np->flags &= ~CRYPTO_CLEAR;
 			}
@@ -164,8 +163,8 @@ __attribute__((destructor)) static void crypto_malloc_dtor() {
 void *malloc(size_t size) {
 	if (size == 0)
 		return NULL;
-	// TODO:0 may need to check if the right segfault handler is set
-	size = (size + 4095) & ~0xFFF; // must be page aligned for offset
+	size_t crypto_size = ALIGN_UP(size, 16);
+	size = ALIGN_UP(size, PAGE_SIZE); // must be page aligned for offset
 	cor_map_node *fit_node = NULL;
 
 	pthread_mutex_lock(&mymutex);
@@ -196,6 +195,7 @@ void *malloc(size_t size) {
 		fit_node->key = user_mem;
 		fit_node->cryptoaddr = crypto_mem;
 		fit_node->alloc_size = size;
+		fit_node->crypto_size = crypto_size;
 		fit_node->flags = CRYPTO_CLEAR;
 		cor_map_set(&mem_map, fit_node);
 		goto success;
@@ -221,7 +221,7 @@ void free(void *ptr) {
 	if (previous != NULL) {
 		if (previous->flags & CRYPTO_CLEAR) {
 			// zero out the memory before releasing if it is clear
-			memset(previous->key, 0, previous->alloc_size);
+			memset(previous->key, 0, previous->crypto_size);
 		}
 		previous->next = NULL;
 		cor_map_set(&free_map, previous);
