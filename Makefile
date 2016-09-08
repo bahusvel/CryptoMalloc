@@ -1,37 +1,34 @@
 .PHONY: clean
 
 CC = gcc
-CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread
+CFLAGS = -W -fPIC -Wall -Wextra -O2 -g -std=c99 -pthread -Iinclude
 LDFLAGS = -shared -ldl
 TEST_PROGRAM = /usr/bin/python3
 TEST_PROG_NAME = python3
 
 
-all: clean cryptomalloc test
-
-test:
-	gcc -std=c99 CryptoMallocTest/main.c -o test
+all: clean cryptomalloc
 
 clean:
-	rm -f *.o *.so segments binencrypt monitor core segment_test test
+	rm -f *.o *.so binencrypt monitor core segment_test
 
 aes.o:
-	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c CryptoMalloc/aes.c
+	gcc $(CFLAGS) -c lib/aes.c
 
 libsegments: aes.o
-	gcc -W -fPIC -Wall -Wextra -O2 -g -std=c99 -c -I./CryptoMalloc/ CryptoSegments/segments.c
+	gcc $(CFLAGS) -c  segments/segments.c
 	gcc $(LDFLAGS) -o CryptoSegments.so segments.o aes.o -lrt -lpthread -lelf
 
 cryptomalloc: aes.o
-	gcc $(CFLAGS) -c CryptoMalloc/main.c
+	gcc $(CFLAGS) -c lib/main.c
 	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
 
 segment_test:
-	gcc -std=c99 -I./CryptoSegments/ CryptoMallocTest/segment_test.c -o segment_test
+	gcc $(CFLAGS) test/segment_test.c -o segment_test
 	./segment_test
 
 profile_list:
-	gcc -ICryptoMalloc/ -c -O2 CryptoMallocTest/rb_test.c -o rb_test.o
+	gcc $(CFLAGS) -c  test/rb_test.c -o rb_test.o
 	gcc rb_test.o -o rb_test
 	./rb_test
 
@@ -45,17 +42,14 @@ dynamic_encryption: clean libsegments binencrypt
 	LD_PRELOAD=./CryptoSegments.so ./$(TEST_PROG_NAME)
 
 binencrypt: aes.o
-	gcc -W -Wall -Wextra -O2 -g -std=c99 -I./CryptoMalloc/ -c CryptoSegments/main.c -o binencrypt.o
+	gcc $(CFLAGS) -c CryptoSegments/main.c -o binencrypt.o
 	gcc -o binencrypt binencrypt.o aes.o -lelf
 
 run:
 	./cmalloc.sh python3
 
-bank:
-	cd demo; gcc bank.c -o bank
+demo_crypto: clean cryptomalloc
+	cd demo; LD_PRELOAD=../CryptoMalloc.so python3 bank.py
 
-demo_crypto: clean cryptomalloc bank
-	cd demo; LD_PRELOAD=../CryptoMalloc.so ./bank
-
-demo_clear: clean bank
-	cd demo; ./bank
+demo_clear: clean
+	cd demo; python3 bank.py
