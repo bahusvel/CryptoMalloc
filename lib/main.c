@@ -51,36 +51,34 @@ static off_t crypto_mem_break = 0;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
-// comment this out to not encrypt STDIO
-#define ENCRYPT_STDIO 1
-
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
 
+void safe_print(const char *message) { write(1, message, strlen(message)); }
+
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	if (address == NULL)
 		goto segfault;
 	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL) {
 		// printf("Decrypting your ram\n");
-		AES128_ECB_decrypt_buffer(np->cryptoaddr, np->crypto_size);
+		pthread_mutex_lock(&mymutex);
+		AES128_ECB_decrypt_buffer(np->cryptoaddr, np->alloc_size);
 		// printf("Decrypted!\n");
-		mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE);
+		mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC);
 		np->flags |= CRYPTO_CLEAR;
 		pthread_mutex_unlock(&mymutex);
 		return;
 	} else {
-		pthread_mutex_unlock(&mymutex);
 		goto segfault;
 	}
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
-	printf("Real Seg Fault Happened :(\n");
+	safe_print("Real Seg Fault Happened :(\n");
 	old_handler.sa_sigaction(signum, info, context);
 	return;
 }
@@ -99,15 +97,12 @@ static void *encryptor(void *ptr) {
 		COR_MAP_FOREACH(map, np) {
 			if (np->flags & CRYPTO_CLEAR) {
 				mprotect(np->key, np->alloc_size, PROT_NONE);
-				AES128_ECB_encrypt_buffer(np->cryptoaddr, np->crypto_size);
-				// printf("Encrypted!\n");
+				AES128_ECB_encrypt_buffer(np->cryptoaddr, np->alloc_size);
 				np->flags &= ~CRYPTO_CLEAR;
 			}
 		}
 		pthread_mutex_unlock(&mymutex);
-		struct timespec sleep_time = {1, 0}; // seconds, nanoseconds
-		while (nanosleep(&sleep_time, &sleep_time))
-			continue;
+		usleep(1000 * 1000);
 	}
 	return NULL;
 }
@@ -124,7 +119,7 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 	sprintf(PID_PATH, "/%d.mem", getpid());
 	fd = shm_open(PID_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
 	if (fd < 0) {
-		perror("Open");
+		safe_print("Open");
 		abort();
 	}
 
@@ -136,23 +131,15 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 	sa.sa_flags = SA_SIGINFO | SA_RESTART;
 
 	if (sigaction(SIGSEGV, &sa, &old_handler) < 0) {
-		perror("Signal Handler Installation Failed:");
+		safe_print("Signal Handler Installation Failed:");
 		abort();
 	}
 
 	int iret = pthread_create(&encryptor_thread, NULL, encryptor, NULL);
 	if (iret) {
-		printf("Error - pthread_create() return code: %d\n", iret);
+		safe_print("Error - pthread_create()");
 		exit(EXIT_FAILURE);
 	}
-
-#ifdef ENCRYPT_STDIO
-	// this is a bit evil and is questionable whether it should be used...
-	char *stdout_buffer = malloc(BUFSIZ);
-	char *stdin_buffer = malloc(BUFSIZ);
-	setbuf(stdin, stdin_buffer);
-	setbuf(stdout, stdout_buffer);
-#endif
 }
 
 __attribute__((destructor)) static void crypto_malloc_dtor() {
@@ -181,7 +168,7 @@ void *malloc(size_t size) {
 	crypto_mem_break += size;
 
 	if (ftruncate(fd, crypto_mem_break) < 0) {
-		perror("ftruncate");
+		safe_print("ftruncate");
 		goto failure;
 	}
 
@@ -200,7 +187,7 @@ void *malloc(size_t size) {
 		cor_map_set(&mem_map, fit_node);
 		goto success;
 	} else {
-		perror("mmap");
+		safe_print("mmap");
 		errno = ENOMEM;
 		goto failure;
 	}
@@ -230,7 +217,7 @@ void free(void *ptr) {
 
 	if ((previous = cor_map_delete(&mem_map, ptr)) == NULL) {
 		// It really should never go here, but its left as a precaution
-		printf("free: Forreign pointer\n");
+		safe_print("free: Forreign pointer\n");
 	}
 	pthread_mutex_unlock(&mymutex);
 }
@@ -248,7 +235,7 @@ void *realloc(void *ptr, size_t size) {
 	if ((node = cor_map_get(&mem_map, ptr)) != NULL) {
 		new_addr = malloc(size);
 		if (new_addr == NULL) {
-			printf("MALLOC RETURNED NULL %zu\n", size);
+			safe_print("MALLOC RETURNED NULL");
 			return NULL;
 		}
 		memcpy(new_addr, ptr,
@@ -257,7 +244,7 @@ void *realloc(void *ptr, size_t size) {
 		return new_addr;
 	}
 	// It really should never go here, but its left as a precaution
-	printf("realloc: Forreign pointer\n");
+	safe_print("realloc: Forreign pointer\n");
 	return NULL;
 }
 
