@@ -11,6 +11,7 @@
 #include "aes.h"
 #include "list.h"
 
+#include "shims.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -107,6 +108,16 @@ static void *encryptor(void *ptr) {
 	return NULL;
 }
 
+static inline void *symbol_from_lib(void *dlhandle, const char *symbol_name) {
+	// locate libc funcions (potentially through libc file)
+	void *symbol = dlsym(dlhandle, symbol_name);
+	if (symbol == NULL) {
+		printf("Failed to fetch %s\n", symbol_name);
+		exit(-1);
+	}
+	return symbol;
+}
+
 __attribute__((constructor)) static void crypto_malloc_ctor() {
 	PAGE_SIZE = getpagesize();
 	AES128_SetKey(AES_KEY);
@@ -122,6 +133,10 @@ __attribute__((constructor)) static void crypto_malloc_ctor() {
 		safe_print("Open");
 		abort();
 	}
+
+#define X(n) libc_##n = symbol_from_lib(RTLD_NEXT, #n);
+	OPLIST
+#undef X
 
 	// setting up signal handler
 	static struct sigaction sa;

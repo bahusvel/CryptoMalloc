@@ -1,7 +1,7 @@
 .PHONY: clean
 
 CC = gcc
-CFLAGS = -W -fPIC -Wall -Wextra -g -std=c99 -pthread -Iinclude
+CFLAGS = -W -fPIC -Wall -Wextra -O -g -std=c99 -pthread -Iinclude
 LDFLAGS = -shared -ldl
 TEST_PROGRAM = /usr/bin/python3
 TEST_PROG_NAME = python3
@@ -13,7 +13,7 @@ clean:
 	rm -f *.o *.so binencrypt monitor core segment_test
 
 aes.o:
-	gcc $(CFLAGS) -O2 -c lib/aes.c
+	gcc $(CFLAGS) -c lib/aes.c
 
 libsegments: aes.o
 	gcc $(CFLAGS) -c  segments/segments.c
@@ -21,7 +21,8 @@ libsegments: aes.o
 
 cryptomalloc: aes.o
 	gcc $(CFLAGS) -c lib/main.c
-	gcc $(LDFLAGS) -o CryptoMalloc.so main.o aes.o -lrt
+	gcc $(CFLAGS) -c lib/shim.c
+	gcc -o CryptoMalloc.so main.o shim.o aes.o -lrt -ldl -shared
 
 segment_test:
 	gcc $(CFLAGS) test/segment_test.c -o segment_test

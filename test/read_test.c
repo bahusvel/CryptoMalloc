@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 int main() {
-	char buf[5];
-	scanf("%s", buf);
+	char *buf = malloc(5);
+	read(0, buf, 5);
 	write(1, buf, 5);
 }
