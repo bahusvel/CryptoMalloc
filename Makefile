@@ -50,3 +50,12 @@ binencrypt: aes.o
 
 run:
 	./cmalloc.sh python3
+
+bank:
+	cd demo; gcc bank.c -o bank
+
+demo_crypto: clean cryptomalloc bank
+	cd demo; LD_PRELOAD=../CryptoMalloc.so ./bank
+
+demo_clear: clean bank
+	cd demo; ./bank
