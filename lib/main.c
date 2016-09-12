@@ -53,13 +53,19 @@ static off_t crypto_mem_break = 0;
 static struct sigaction old_handler;
 static pthread_t encryptor_thread;
 
+/*
+MUST READ !!! DO NOT WRITE ANY CODE UNTIL YOU READ THIS !!!
+This mutex is crucial, it locks access to cor_map and all of its nodes, you must
+lock it if you are making decisions based on some infomation in one of the
+cor_map_nodes as it may change at any time, you must perform those checks only
+after you locked this. Exceptions to this rule are very rare, hence always lock
+unless you are sure.
+*/
 static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
 							0x09, 0xcf, 0x4f, 0x3c}; // :)
-
-void safe_print(const char *message) { write(1, message, strlen(message)); }
 
 static inline void encrypt_node(cor_map_node *np) {
 	mprotect(np->key, np->alloc_size, PROT_NONE);
@@ -73,9 +79,9 @@ static inline void decrypt_node(cor_map_node *np) {
 	np->flags = CRYPTO_CLEAR;
 }
 
-int ca_nocipher(void *address) {
+void ca_nocipher(void *address) {
 	if (address == NULL)
-		return -1;
+		return;
 	cor_map_node *np;
 	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
@@ -86,33 +92,40 @@ int ca_nocipher(void *address) {
 		np->flags = CRYPTO_NOCIPHER;
 	}
 	pthread_mutex_unlock(&mymutex);
-	return -1;
 }
 
-int ca_encrypt(void *address) {
+void ca_recipher(void *address) {
 	if (address == NULL)
-		return -1;
+		return;
+	cor_map_node *np;
+	if ((np = cor_map_range(&mem_map, address)) != NULL &&
+		(np->flags == CRYPTO_NOCIPHER)) {
+		np->flags = CRYPTO_CLEAR;
+	}
+}
+
+void ca_encrypt(void *address) {
+	if (address == NULL)
+		return;
 	cor_map_node *np;
 	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
 		np->flags != CRYPTO_CIPHER) {
 		encrypt_node(np);
-		return 0;
 	}
 	pthread_mutex_unlock(&mymutex);
-	return -1;
 }
 
-int ca_decrypt(void *address) {
+void ca_decrypt(void *address) {
 	if (address == NULL)
-		return -1;
+		return;
 	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
 		(np->flags == CRYPTO_CIPHER)) {
 		decrypt_node(np);
-		return 0;
 	}
-	return -1;
+	pthread_mutex_unlock(&mymutex);
 }
 
 static void decryptor(int signum, siginfo_t *info, void *context) {

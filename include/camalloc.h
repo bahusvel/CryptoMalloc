@@ -1,6 +1,8 @@
 #ifndef _CAMALLOC_
 #define _CAMALLOC_
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #ifdef __APPLE__
 static void *(*__libc_malloc)(size_t size);
@@ -19,8 +21,14 @@ extern void *__libc_calloc(size_t count, size_t size);
 #define crypto_realloc realloc
 #define crypto_calloc calloc
 
-int camalloc_decrypt(void *address);
-int camalloc_encrypt(void *address);
+inline void safe_print(const char *message) {
+	write(1, message, strlen(message));
+}
+
+void ca_nocipher(void *address);
+void ca_recipher(void *address);
+void ca_encrypt(void *address);
+void ca_decrypt(void *address);
 
 // libc
 
