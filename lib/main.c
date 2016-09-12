@@ -28,6 +28,7 @@
 
 #define CRYPTO_NOCIPHER 0x01
 #define CRYPTO_CLEAR 0x02
+#define CRYPTO_CIPHER 0x04
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -60,23 +61,72 @@ static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 
 void safe_print(const char *message) { write(1, message, strlen(message)); }
 
+static inline void encrypt_node(cor_map_node *np) {
+	mprotect(np->key, np->alloc_size, PROT_NONE);
+	AES128_ECB_encrypt_buffer(np->cryptoaddr, np->alloc_size);
+	np->flags = CRYPTO_CIPHER;
+}
+
+static inline void decrypt_node(cor_map_node *np) {
+	AES128_ECB_decrypt_buffer(np->cryptoaddr, np->alloc_size);
+	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC);
+	np->flags = CRYPTO_CLEAR;
+}
+
+int ca_nocipher(void *address) {
+	if (address == NULL)
+		return -1;
+	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
+	if ((np = cor_map_range(&mem_map, address)) != NULL &&
+		(np->flags != CRYPTO_NOCIPHER)) {
+		if (np->flags == CRYPTO_CIPHER) {
+			decrypt_node(np);
+		}
+		np->flags = CRYPTO_NOCIPHER;
+	}
+	pthread_mutex_unlock(&mymutex);
+	return -1;
+}
+
+int ca_encrypt(void *address) {
+	if (address == NULL)
+		return -1;
+	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
+	if ((np = cor_map_range(&mem_map, address)) != NULL &&
+		np->flags != CRYPTO_CIPHER) {
+		encrypt_node(np);
+		return 0;
+	}
+	pthread_mutex_unlock(&mymutex);
+	return -1;
+}
+
+int ca_decrypt(void *address) {
+	if (address == NULL)
+		return -1;
+	cor_map_node *np;
+	if ((np = cor_map_range(&mem_map, address)) != NULL &&
+		(np->flags == CRYPTO_CIPHER)) {
+		decrypt_node(np);
+		return 0;
+	}
+	return -1;
+}
+
 static void decryptor(int signum, siginfo_t *info, void *context) {
 	void *address = info->si_addr;
 	if (address == NULL)
 		goto segfault;
 	cor_map_node *np;
+	pthread_mutex_lock(&mymutex);
 	if ((np = cor_map_range(&mem_map, address)) != NULL) {
-		// printf("Decrypting your ram\n");
-		pthread_mutex_lock(&mymutex);
-		AES128_ECB_decrypt_buffer(np->cryptoaddr, np->alloc_size);
-		// printf("Decrypted!\n");
-		mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC);
-		np->flags |= CRYPTO_CLEAR;
+		decrypt_node(np);
 		pthread_mutex_unlock(&mymutex);
 		return;
-	} else {
-		goto segfault;
 	}
+	pthread_mutex_unlock(&mymutex);
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
 	safe_print("Real Seg Fault Happened :(\n");
@@ -88,18 +138,15 @@ static void *encryptor(void *ptr) {
 	sigset_t set;
 	sigemptyset(&set);
 	sigaddset(&set, SIGSEGV);
-	// this will block sigsegv on this thread, so ensure code from here on is
-	// correct
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
+
 	cor_map *map = &mem_map;
 	cor_map_node *np;
 	while (1) {
 		pthread_mutex_lock(&mymutex);
 		COR_MAP_FOREACH(map, np) {
-			if (np->flags & CRYPTO_CLEAR) {
-				mprotect(np->key, np->alloc_size, PROT_NONE);
-				AES128_ECB_encrypt_buffer(np->cryptoaddr, np->alloc_size);
-				np->flags &= ~CRYPTO_CLEAR;
+			if (np->flags == CRYPTO_CLEAR) {
+				encrypt_node(np);
 			}
 		}
 		pthread_mutex_unlock(&mymutex);
@@ -163,6 +210,7 @@ __attribute__((destructor)) static void crypto_malloc_dtor() {
 }
 
 void *malloc(size_t size) {
+	// safe_print("Malloc called\n");
 	if (size == 0)
 		return NULL;
 	size_t crypto_size = ALIGN_UP(size, 16);

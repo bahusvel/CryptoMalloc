@@ -4,6 +4,6 @@
 
 int main() {
 	char *buf = malloc(5);
-	read(0, buf, 5);
+	scanf("%s", buf);
 	write(1, buf, 5);
 }
