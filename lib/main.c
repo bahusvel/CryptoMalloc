@@ -63,12 +63,12 @@ void safe_print(const char *message) { write(1, message, strlen(message)); }
 
 static inline void encrypt_node(cor_map_node *np) {
 	mprotect(np->key, np->alloc_size, PROT_NONE);
-	AES128_ECB_encrypt_buffer(np->cryptoaddr, np->alloc_size);
+	AES128_ECB_encrypt_buffer(np->cryptoaddr, np->crypto_size);
 	np->flags = CRYPTO_CIPHER;
 }
 
 static inline void decrypt_node(cor_map_node *np) {
-	AES128_ECB_decrypt_buffer(np->cryptoaddr, np->alloc_size);
+	AES128_ECB_decrypt_buffer(np->cryptoaddr, np->crypto_size);
 	mprotect(np->key, np->alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC);
 	np->flags = CRYPTO_CLEAR;
 }
