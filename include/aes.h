@@ -30,9 +30,9 @@ void AES128_ECB_decrypt(uint8_t *input, const uint8_t *key, uint8_t *output);
 void AES128_ECB_encrypt_inplace(uint8_t *input);
 void AES128_ECB_decrypt_inplace(uint8_t *input);
 
-inline int AES128_ECB_encrypt_buffer(void *buffer, size_t size) {
+static inline int AES128_ECB_encrypt_buffer(void *buffer, size_t size) {
 	if ((size % 16) != 0) {
-		printf("Buffer size not multiple of 16: %lu\n", size);
+		abort();
 		return -1;
 	}
 	for (size_t i = 0; i < size; i += 16) {
@@ -40,9 +40,9 @@ inline int AES128_ECB_encrypt_buffer(void *buffer, size_t size) {
 	}
 	return 0;
 }
-inline int AES128_ECB_decrypt_buffer(void *buffer, size_t size) {
+static inline int AES128_ECB_decrypt_buffer(void *buffer, size_t size) {
 	if ((size % 16) != 0) {
-		printf("Buffer size not multiple of 16: %lu\n", size);
+		abort();
 		return -1;
 	}
 	for (size_t i = 0; i < size; i += 16) {
