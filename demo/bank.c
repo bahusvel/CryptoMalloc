@@ -7,10 +7,6 @@
 
 #define startsWith(str, prefix) strncmp(prefix, str, strlen(prefix)) == 0
 
-static inline void safe_print(const char *message) {
-	write(1, message, strlen(message));
-}
-
 void xor_cipher(char *message, size_t messagelen, char *key) {
 	size_t keylen = strlen(key);
 	for (int i = 0; i < messagelen; i++) {
@@ -22,18 +18,18 @@ int main(int argc, char **argv) {
 	printf("My pid is %d\n", getpid());
 	int fd = open("merged.csv.enc", O_RDONLY);
 	if (fd < 0) {
-		safe_print("Failed to open database");
+		printf("Failed to open database\n");
 		return -1;
 	}
 	struct stat st;
 	fstat(fd, &st);
 	char *db = malloc(st.st_size);
 	if (db == NULL) {
-		safe_print("Failed to allocate memory");
+		printf("Failed to allocate memory\n");
 		return -1;
 	}
 	if (read(fd, db, st.st_size) < st.st_size) {
-		safe_print("Failed to read file");
+		printf("Failed to read file\n");
 		return -1;
 	}
 	xor_cipher(db, st.st_size, "bankpassword");
@@ -47,7 +43,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	while (1) {
-		safe_print("Enter email address:");
+		printf("Enter email address:\n");
 		char *input = malloc(1024);
 		int n = read(0, input, 1024);
 		input[n - 1] = '\0';
