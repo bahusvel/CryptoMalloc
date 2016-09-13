@@ -9,9 +9,10 @@
 #define _GNU_SOURCE
 
 #include "aes.h"
+#include "camalloc.h"
 #include "list.h"
-
 #include "shims.h"
+
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -35,14 +36,6 @@
 
 #define ALIGN_UP(val, n) (val + (n - 1)) & ~(n - 1)
 #define ALIGN_DOWN(val, n) val & ~(n - 1)
-
-#ifdef __APPLE__
-static void *(*__libc_malloc)(size_t size);
-static void *(*__libc_free)(void *ptr);
-#else
-extern void *__libc_malloc(size_t size);
-extern void *__libc_free(void *ptr);
-#endif
 
 static char PID_PATH[PATH_MAX];
 static int PAGE_SIZE;

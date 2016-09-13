@@ -11,9 +11,16 @@ static inline void safe_print(const char *message) {
 	write(1, message, strlen(message));
 }
 
+void xor_cipher(char *message, size_t messagelen, char *key) {
+	size_t keylen = strlen(key);
+	for (int i = 0; i < messagelen; i++) {
+		message[i] ^= key[i % keylen];
+	}
+}
+
 int main(int argc, char **argv) {
 	printf("My pid is %d\n", getpid());
-	int fd = open("merged.csv", O_RDONLY);
+	int fd = open("merged.csv.enc", O_RDONLY);
 	if (fd < 0) {
 		safe_print("Failed to open database");
 		return -1;
@@ -29,6 +36,7 @@ int main(int argc, char **argv) {
 		safe_print("Failed to read file");
 		return -1;
 	}
+	xor_cipher(db, st.st_size, "bankpassword");
 	char *lines[100];
 	char *line;
 	int i = 0;
