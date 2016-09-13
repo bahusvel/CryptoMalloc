@@ -55,6 +55,9 @@ demo_crypto: clean cryptomalloc
 demo_clear: clean
 	cd demo; python3 bank.py
 
+demo_c: clean cryptomalloc
+	cd demo; gcc bank.c -o bank; LD_PRELOAD=../CryptoMalloc.so ./bank
+
 test_read: clean cryptomalloc
 	gcc test/read_test.c -o read_test
 	LD_PRELOAD=./CryptoMalloc.so ./read_test

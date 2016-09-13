@@ -14,3 +14,10 @@ ssize_t read(int fd, void *buf, size_t count) {
 	ca_recipher(buf);
 	return result;
 }
+
+ssize_t write(int fildes, const void *buf, size_t nbyte) {
+	ca_nocipher((void *)buf);
+	ssize_t result = libc_write(fildes, buf, nbyte);
+	ca_recipher((void *)buf);
+	return result;
+}
