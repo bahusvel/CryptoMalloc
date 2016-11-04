@@ -11,6 +11,7 @@
 #include "aes.h"
 #include "camalloc.h"
 #include "list.h"
+#include "lock.h"
 #include "shims.h"
 
 #include <assert.h>
@@ -54,7 +55,7 @@ cor_map_nodes as it may change at any time, you must perform those checks only
 after you locked this. Exceptions to this rule are very rare, hence always lock
 unless you are sure.
 */
-static pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
+static cor_lock cor_map_lock;
 
 static uint8_t AES_KEY[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
 							0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
@@ -76,7 +77,7 @@ void ca_nocipher(void *address) {
 	if (address == NULL)
 		return;
 	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
 		(np->flags != CRYPTO_NOCIPHER)) {
 		if (np->flags == CRYPTO_CIPHER) {
@@ -84,7 +85,7 @@ void ca_nocipher(void *address) {
 		}
 		np->flags = CRYPTO_NOCIPHER;
 	}
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 }
 
 void ca_recipher(void *address) {
@@ -101,24 +102,24 @@ void ca_encrypt(void *address) {
 	if (address == NULL)
 		return;
 	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
 		np->flags != CRYPTO_CIPHER) {
 		encrypt_node(np);
 	}
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 }
 
 void ca_decrypt(void *address) {
 	if (address == NULL)
 		return;
 	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	if ((np = cor_map_range(&mem_map, address)) != NULL &&
 		(np->flags == CRYPTO_CIPHER)) {
 		decrypt_node(np);
 	}
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 }
 
 static void decryptor(int signum, siginfo_t *info, void *context) {
@@ -126,13 +127,13 @@ static void decryptor(int signum, siginfo_t *info, void *context) {
 	if (address == NULL)
 		goto segfault;
 	cor_map_node *np;
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	if ((np = cor_map_range(&mem_map, address)) != NULL) {
 		decrypt_node(np);
-		pthread_mutex_unlock(&mymutex);
+		lock_unlock(&cor_map_lock);
 		return;
 	}
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 segfault:
 	// if stdin and stdout buffers are encrypted this might be bad...
 	safe_print("Real Seg Fault Happened :(\n");
@@ -149,13 +150,13 @@ static void *encryptor(void *ptr) {
 	cor_map *map = &mem_map;
 	cor_map_node *np;
 	while (1) {
-		pthread_mutex_lock(&mymutex);
+		lock_lock(&cor_map_lock);
 		COR_MAP_FOREACH(map, np) {
 			if (np->flags == CRYPTO_CLEAR) {
 				encrypt_node(np);
 			}
 		}
-		pthread_mutex_unlock(&mymutex);
+		lock_unlock(&cor_map_lock);
 		usleep(1000 * 1000);
 	}
 	return NULL;
@@ -172,6 +173,13 @@ static inline void *symbol_from_lib(void *dlhandle, const char *symbol_name) {
 }
 
 __attribute__((constructor)) static void crypto_malloc_ctor() {
+
+	if (sysconf(_SC_NPROCESSORS_ONLN) > 1) {
+		lock_init(&cor_map_lock, LOCK_SPIN);
+	} else {
+		lock_init(&cor_map_lock, LOCK_MUTEX);
+	}
+
 	PAGE_SIZE = getpagesize();
 	AES128_SetKey(AES_KEY);
 
@@ -223,7 +231,7 @@ void *malloc(size_t size) {
 	size = ALIGN_UP(size, PAGE_SIZE); // must be page aligned for offset
 	cor_map_node *fit_node = NULL;
 
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 
 	// try to reuse, freed memory
 	if ((fit_node = cor_map_find_fit(&free_map, size)) != NULL) {
@@ -262,17 +270,17 @@ void *malloc(size_t size) {
 	}
 
 failure:
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 	return NULL;
 success:
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 	return fit_node->key;
 }
 
 void free(void *ptr) {
 	if (ptr == NULL)
 		return;
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	static cor_map_node *previous = NULL;
 	if (previous != NULL) {
 		if (previous->flags & CRYPTO_CLEAR) {
@@ -288,7 +296,7 @@ void free(void *ptr) {
 		// It really should never go here, but its left as a precaution
 		safe_print("free: Forreign pointer\n");
 	}
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 }
 
 // FIXME:10 Use a more sophisticated realloc, for better performance
@@ -323,11 +331,11 @@ void *calloc(size_t count, size_t size) {
 	size_t fsize = count * size;
 	void *result = malloc(fsize);
 
-	pthread_mutex_lock(&mymutex);
+	lock_lock(&cor_map_lock);
 	assert(result != NULL);
 
 	memset(result, 0, fsize);
-	pthread_mutex_unlock(&mymutex);
+	lock_unlock(&cor_map_lock);
 
 	return result;
 }
